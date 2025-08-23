@@ -1,6 +1,6 @@
 # WhatsMyBudget
 
-**WhatsMyBudget** is an interactive Java application for personal budget tracking, category breakdowns, and weekly spending analysis. The application helps users monitor spending by category, compare actual and projected expenses, and view detailed weekly breakdowns for each spending category.
+**WhatsMyBudget** is a showcase Java application for personal budget tracking, category breakdowns, and weekly spending analysis. The app demonstrates interactive UI features for exploring spending data, with a focus on visualization and analysis rather than deployment or production use.
 
 ## Features
 
@@ -8,22 +8,29 @@
 - **Projected vs Actual Spending**: Add and remove projected expenses for future planning.
 - **Weekly Analysis**: Click any category to see a detailed weekly breakdown for the current month.
 - **Joint and Individual Accounts**: Easily split and attribute joint expenses.
-- **Beautiful UI**: Uses modern Java Swing components with custom styling.
+- **Modern UI**: Uses Java Swing components with custom styling.
 
-## Getting Started
+## Screenshots
 
-1. **Clone this repository:**
-    ```sh
-    git clone https://github.com/YOUR_USERNAME/whatsMyBudget.git
-    ```
+**Home Panel**
 
-2. **Open the project in your favorite Java IDE.**
+![Home panel](files/Home.png)
 
-3. **Build and run the application.**
-    - Make sure you have Java 8 or higher installed.
+**Projected Spending Panel**
 
-4. **Import your transactions:**
-    - Supported formats: CSV with columns such as Name, Amount, Category, Account, Criticality, Transaction Date, Created time.
+![Projected panel](files/Projected.png)
+
+## About
+
+This repository is intended as a **showcase** of an interactive budget analysis tool, not as a ready-to-use product.  
+It demonstrates:
+- A custom Java Swing UI for budget analysis,
+- Interactive breakdowns by category and week,
+- Handling of joint and individual spending.
+
+> **Note:**  
+> The code is provided for demonstration and review.  
+> It is not intended for direct cloning, installation, or production use.
 
 ## Example CSV Format
 
@@ -33,20 +40,6 @@ Publix,$10.00,Groceries,Joint,Essential,"August 5, 2025","August 22, 2025 11:55 
 Amazon,$28.36,music,Josh,NonEssential,"August 4, 2025","August 22, 2025 12:17 PM"
 ...
 ```
-
-## Usage
-
-- **Add projected expenses** to forecast future spending.
-- **Remove projected expenses** as plans change.
-- **Click on a spending category** to open a popup showing weekly spending totals for the current month.
-
-## Contributing
-
-Pull requests and suggestions are welcome! Please open an issue or submit a PR.
-
-## License
-
-MIT License
 
 ## Author
 
