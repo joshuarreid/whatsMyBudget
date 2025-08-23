@@ -14,7 +14,7 @@
 
 **Home Panel**
 
-![Home panel](files/Home.png)
+![Home panel]([files/Home.png](https://github.com/joshuarreid/whatsMyBudget/blob/main/Home.png))
 
 **Projected Spending Panel**
 
