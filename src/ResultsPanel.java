@@ -240,7 +240,7 @@ public class ResultsPanel extends JPanel {
         }
 
         // --- Custom week grouping: Week 1 (1–7), Week 2 (8–14), Week 3 (15–21), Week 4 (22–end) ---
-        String[] weekLabels = {"Week 1 (1–7)", "Week 2 (8–14)", "Week 3 (15–21)", "Week 4 (22–end)"};
+        String[] weekLabels = {"Week 1 (1–7)", "Week 2 (8–14)", "Week 3 (15–21)", "Week 4 (22–29)", "Week 5 (29-end)"};
         Map<String, Double> weekTotals = new LinkedHashMap<>();
         for (String label : weekLabels) weekTotals.put(label, 0.0);
 
@@ -251,7 +251,8 @@ public class ResultsPanel extends JPanel {
             if (day <= 7) weekLabel = weekLabels[0];
             else if (day <= 14) weekLabel = weekLabels[1];
             else if (day <= 21) weekLabel = weekLabels[2];
-            else weekLabel = weekLabels[3];
+            else if (day <= 29) weekLabel = weekLabels[3];
+            else weekLabel = weekLabels[4];
             double amt = tx.account.trim().equalsIgnoreCase("joint") ? tx.amount / 2.0 : tx.amount;
             weekTotals.put(weekLabel, weekTotals.get(weekLabel) + amt);
         }
