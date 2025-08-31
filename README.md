@@ -14,11 +14,11 @@
 
 **Home Panel**
 
-![Home panel](files/Home.png)
+![Home panel](https://github.com/joshuarreid/whatsMyBudget/blob/main/Home.png)
 
 **Projected Spending Panel**
 
-![Projected panel](files/Projected.png)
+![Projected panel](https://github.com/joshuarreid/whatsMyBudget/blob/main/Projected.png)
 
 ## About
 
@@ -43,4 +43,4 @@ Amazon,$28.36,music,Josh,NonEssential,"August 4, 2025","August 22, 2025 12:17 PM
 
 ## Author
 
-Josh Reid  
+Joshua Reid  
