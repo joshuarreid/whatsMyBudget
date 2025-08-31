@@ -39,6 +39,11 @@ public class BudgetBreakdownApp extends JFrame {
         navMenu.add(plannerItem);
         menuBar.add(navMenu);
         setJMenuBar(menuBar);
+        JMenu fileMenu = new JMenu("File");
+        JMenuItem saveCsvItem = new JMenuItem("Save as CSV");
+        saveCsvItem.addActionListener(e -> saveAsCsv());
+        fileMenu.add(saveCsvItem);
+        menuBar.add(fileMenu);
 
         JPanel uploadPanel = new JPanel();
         uploadPanel.setLayout(new BoxLayout(uploadPanel, BoxLayout.Y_AXIS));
@@ -438,9 +443,8 @@ public class BudgetBreakdownApp extends JFrame {
 
         if (option == JFileChooser.APPROVE_OPTION) {
             File csvFile = fileChooser.getSelectedFile();
-            List<Transaction> transactions = parseCSV(csvFile);
-            lastTransactions = transactions;
-            Map<String, Map<String, Map<String, Double>>> breakdown = calculateBreakdown(transactions);
+            importCSV(csvFile); // <-- NEW METHOD
+            Map<String, Map<String, Map<String, Double>>> breakdown = calculateBreakdown(lastTransactions);
             showResults(breakdown);
         }
     }
@@ -474,6 +478,54 @@ public class BudgetBreakdownApp extends JFrame {
         return transactions;
     }
 
+    private void importCSV(File csvFile) {
+        List<Transaction> importedTransactions = new ArrayList<>();
+        List<ProjectedExpense> importedProjected = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
+            String line = br.readLine(); // header
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty() || line.startsWith(",")) continue;
+                String[] parts = splitCSVLine(line);
+                if (parts.length < 8) continue; // 8 fields expected
+                String name = parts[0].trim();
+                double amount = parseAmount(parts[1].trim());
+                String category = parts[2].trim();
+                String account = parts[3].trim();
+                String criticality = parts[4].trim();
+                String transactionDate = parts[5].trim();
+                String createdTime = parts[6].trim();
+                String status = parts[7].trim().toLowerCase();
+
+                if (status.equals("active")) {
+                    // Add to projectedExpenses
+                    importedProjected.add(new ProjectedExpense(
+                            account, // person
+                            criticality,
+                            category,
+                            amount,
+                            account.equalsIgnoreCase("joint")
+                    ));
+                } else {
+                    // Add to actuals
+                    importedTransactions.add(new Transaction(
+                            name,
+                            amount,
+                            category,
+                            account,
+                            criticality,
+                            transactionDate,
+                            createdTime,
+                            status
+                    ));
+                }
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error parsing CSV: " + ex.getMessage());
+        }
+        lastTransactions = importedTransactions;
+        projectedExpenses = importedProjected;
+    }
+
     private String[] splitCSVLine(String line) {
         List<String> result = new ArrayList<>();
         StringBuilder sb = new StringBuilder();
@@ -487,6 +539,24 @@ public class BudgetBreakdownApp extends JFrame {
         }
         result.add(sb.toString());
         return result.toArray(new String[0]);
+    }
+
+    private void saveAsCsv() {
+        List<Transaction> allTx = new ArrayList<>(lastTransactions);
+        // Convert projectedExpenses to Transaction with status "active"
+        for (ProjectedExpense pe : projectedExpenses) {
+            allTx.add(new Transaction(
+                    pe.subcategory, // name
+                    pe.amount,
+                    pe.subcategory,
+                    pe.person,
+                    pe.criticality,
+                    "", // transactionDate
+                    "", // createdTime
+                    "active"
+            ));
+        }
+        CSVStateManager.saveTransactionsAsCsv(allTx, this);
     }
 
     private double parseAmount(String amtStr) {
