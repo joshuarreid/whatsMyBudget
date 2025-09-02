@@ -41,8 +41,21 @@ public class BudgetBreakdownApp extends JFrame {
         setJMenuBar(menuBar);
         JMenu fileMenu = new JMenu("File");
         JMenuItem saveCsvItem = new JMenuItem("Save as CSV");
+        JMenuItem importNewTxItem = new JMenuItem("Import New Transactions");
+        importNewTxItem.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser();
+            int option = fileChooser.showOpenDialog(this);
+            if (option == JFileChooser.APPROVE_OPTION) {
+                File csvFile = fileChooser.getSelectedFile();
+                importNewTransactions(csvFile);
+                Map<String, Map<String, Map<String, Double>>> breakdown = calculateBreakdown(lastTransactions);
+                showResults(breakdown);
+            }
+        });
+        fileMenu.add(importNewTxItem);
         saveCsvItem.addActionListener(e -> saveAsCsv());
         fileMenu.add(saveCsvItem);
+
         menuBar.add(fileMenu);
 
         JPanel uploadPanel = new JPanel();
@@ -605,6 +618,56 @@ public class BudgetBreakdownApp extends JFrame {
         // Do NOT add projectedExpenses to breakdown here!
 
         return breakdown;
+    }
+
+    private void importNewTransactions(File csvFile) {
+        List<Transaction> newTransactions = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
+            String line = br.readLine(); // header
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty() || line.startsWith(",")) continue;
+                String[] parts = splitCSVLine(line);
+                if (parts.length < 8) continue;
+                String name = parts[0].trim();
+                double amount = parseAmount(parts[1].trim());
+                String category = parts[2].trim();
+                String account = parts[3].trim();
+                String criticality = parts[4].trim();
+                String transactionDate = parts[5].trim();
+                String createdTime = parts[6].trim();
+                String status = parts[7].trim().toLowerCase();
+
+                if (!status.equals("active")) {
+                    Transaction tx = new Transaction(
+                            name, amount, category, account, criticality, transactionDate, createdTime, status
+                    );
+                    if (!isDuplicateTransaction(tx, lastTransactions)) {
+                        newTransactions.add(tx);
+                    }
+                }
+                // If you want to also check for new projections, add similar logic for projectedExpenses.
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error parsing CSV: " + ex.getMessage());
+        }
+        // Add only new transactions to your existing list
+        lastTransactions.addAll(newTransactions);
+        JOptionPane.showMessageDialog(this, newTransactions.size() + " transactions imported");
+    }
+
+    private boolean isDuplicateTransaction(Transaction tx, List<Transaction> existing) {
+        for (Transaction t : existing) {
+            if (
+                    t.name.equals(tx.name) &&
+                            t.amount == tx.amount &&
+                            t.category.equals(tx.category) &&
+                            t.account.equals(tx.account) &&
+                            t.transactionDate.equals(tx.transactionDate)
+            ) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void main(String[] args) {
