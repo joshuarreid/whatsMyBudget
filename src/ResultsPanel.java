@@ -232,35 +232,45 @@ public class ResultsPanel extends JPanel {
 
         for (Transaction tx : lastTransactions) {
             String txPerson = tx.account.trim().equalsIgnoreCase("joint") ? person : tx.account.trim();
-            System.out.println("[DEBUG] Checking transaction: " + tx.category + " | " + txPerson + " | " + tx.transactionDate);
             if (!txPerson.equalsIgnoreCase(person)) {
-                System.out.println("[DEBUG] Skipped: person mismatch (" + txPerson + ")");
                 continue;
             }
             //if (!tx.category.equalsIgnoreCase(category)) continue;
             if (!tx.category.trim().equalsIgnoreCase(category.trim())) {
-                System.out.println("[DEBUG] Skipped: category mismatch (" + tx.category + ")");
                 continue;
             }
 
-            System.out.println("[DEBUG] Included transaction: " + tx.category + " | " + txPerson + " | " + tx.transactionDate);
+            System.out.println("[DEBUG] showWeeklyBreakdown Included transaction: " + tx.category + " | " + txPerson + " | " + tx.transactionDate);
             filtered.add(tx);
         }
 
-        // --- Custom week grouping: Week 1 (1–7), Week 2 (8–14), Week 3 (15–21), Week 4 (22–end) ---
+// Assume filtered is not empty and sorted by transactionDate (chronologically)
+        Calendar firstTxDate = getTxDate(filtered.get(0).transactionDate);
+        int groupMonth = firstTxDate.get(Calendar.MONTH); // 0-based: Jan=0
+        int groupYear = firstTxDate.get(Calendar.YEAR);
+
+        // --- Custom week grouping: Week 1 (1–7), Week 2 (8–14), Week 3 (15–21), Week 4 (22–29), Week 5 (29-end) ---
         String[] weekLabels = {"Week 1 (1–7)", "Week 2 (8–14)", "Week 3 (15–21)", "Week 4 (22–29)", "Week 5 (29-end)"};
         Map<String, Double> weekTotals = new LinkedHashMap<>();
         for (String label : weekLabels) weekTotals.put(label, 0.0);
 
         for (Transaction tx : filtered) {
-            Calendar txDate = getTxDate(tx.transactionDate); // <-- uses Transaction Date now
+            Calendar txDate = getTxDate(tx.transactionDate);
+            int txMonth = txDate.get(Calendar.MONTH);
+            int txYear = txDate.get(Calendar.YEAR);
             int day = txDate.get(Calendar.DAY_OF_MONTH);
+
             String weekLabel;
-            if (day <= 7) weekLabel = weekLabels[0];
-            else if (day <= 14) weekLabel = weekLabels[1];
-            else if (day <= 21) weekLabel = weekLabels[2];
-            else if (day <= 29) weekLabel = weekLabels[3];
-            else weekLabel = weekLabels[4];
+            // If transaction is in a later month/year, always put in last week
+            if (txYear > groupYear || (txYear == groupYear && txMonth > groupMonth)) {
+                weekLabel = weekLabels[4];
+            } else {
+                if (day <= 7) weekLabel = weekLabels[0];
+                else if (day <= 14) weekLabel = weekLabels[1];
+                else if (day <= 21) weekLabel = weekLabels[2];
+                else if (day <= 29) weekLabel = weekLabels[3];
+                else weekLabel = weekLabels[4];
+            }
             double amt = tx.account.trim().equalsIgnoreCase("joint") ? tx.amount / 2.0 : tx.amount;
             weekTotals.put(weekLabel, weekTotals.get(weekLabel) + amt);
         }
