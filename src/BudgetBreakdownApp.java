@@ -496,17 +496,26 @@ public class BudgetBreakdownApp extends JFrame {
         List<ProjectedExpense> importedProjected = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
             String headerLine = br.readLine();
-            if (headerLine == null) return;
+            if (headerLine == null) {
+                System.err.println("CSV Import: Header line is null. Aborting import.");
+                return;
+            }
 
             String[] headers = splitCSVLine(headerLine);
             Map<String, Integer> colIndex = new HashMap<>();
             for (int i = 0; i < headers.length; i++) {
                 colIndex.put(headers[i].trim().toLowerCase(), i);
             }
+            System.out.println("CSV Import: Detected columns = " + colIndex);
 
             String line;
+            int lineNum = 1;
             while ((line = br.readLine()) != null) {
-                if (line.trim().isEmpty() || line.replace(",", "").isEmpty()) continue;
+                lineNum++;
+                if (line.trim().isEmpty() || line.replace(",", "").isEmpty()) {
+                    System.out.printf("CSV Import: Skipping empty line %d: '%s'%n", lineNum, line);
+                    continue;
+                }
                 String[] parts = splitCSVLine(line);
 
                 String name = getField(parts, colIndex, "name");
@@ -517,6 +526,20 @@ public class BudgetBreakdownApp extends JFrame {
                 String transactionDate = getField(parts, colIndex, "transactiondate");
                 String createdTime = getField(parts, colIndex, "createdtime");
                 String status = getField(parts, colIndex, "status").toLowerCase();
+
+                // Log each transaction line as parsed
+                System.out.printf(
+                        "CSV Import [Line %d]: name='%s', amount=%.2f, category='%s', account='%s', criticality='%s', transactionDate='%s', createdTime='%s', status='%s'%n",
+                        lineNum, name, amount, category, account, criticality, transactionDate, createdTime, status
+                );
+
+                // Highlight missing fields
+                if (name.isEmpty() || transactionDate.isEmpty()) {
+                    System.err.printf(
+                            "CSV Import WARNING [Line %d]: Missing name or transactionDate. name='%s', transactionDate='%s'%n",
+                            lineNum, name, transactionDate
+                    );
+                }
 
                 if (status.equals("active")) {
                     // Add to projectedExpenses
@@ -541,20 +564,50 @@ public class BudgetBreakdownApp extends JFrame {
                     ));
                 }
             }
+            System.out.printf("CSV Import: Imported %d actual transactions and %d projected expenses.%n",
+                    importedTransactions.size(), importedProjected.size());
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error parsing CSV: " + ex.getMessage());
+            System.err.println("CSV Import ERROR: " + ex.getMessage());
+            ex.printStackTrace();
         }
         lastTransactions = importedTransactions;
         projectedExpenses = importedProjected;
     }
 
     private String getField(String[] parts, Map<String, Integer> colIndex, String key) {
+        // Try direct match
         Integer idx = colIndex.get(key);
-        if (idx != null && idx < parts.length) {
-            return parts[idx].trim();
-        } else {
-            return ""; // Default if missing
+        if (idx != null && idx < parts.length) return parts[idx].trim();
+
+        // Try matching with spaces removed and case-insensitive
+        for (String col : colIndex.keySet()) {
+            if (col.replace(" ", "").equalsIgnoreCase(key.replace(" ", ""))) {
+                int i = colIndex.get(col);
+                if (i < parts.length) return parts[i].trim();
+            }
         }
+
+        // Try common variants for criticality, account, transactiondate, createdtime
+        if (key.equalsIgnoreCase("transactiondate")) {
+            idx = colIndex.get("Transaction Date");
+            if (idx != null && idx < parts.length) return parts[idx].trim();
+        }
+        if (key.equalsIgnoreCase("createdtime")) {
+            idx = colIndex.get("Created time");
+            if (idx != null && idx < parts.length) return parts[idx].trim();
+        }
+        if (key.equalsIgnoreCase("criticality")) {
+            idx = colIndex.get("Criticality");
+            if (idx != null && idx < parts.length) return parts[idx].trim();
+        }
+        if (key.equalsIgnoreCase("account")) {
+            idx = colIndex.get("Account");
+            if (idx != null && idx < parts.length) return parts[idx].trim();
+        }
+
+        // Return empty string if not found
+        return "";
     }
 
     private String[] splitCSVLine(String line) {

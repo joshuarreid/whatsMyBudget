@@ -21,6 +21,19 @@ public class CSVStateManager {
             try (PrintWriter writer = new PrintWriter(new FileWriter(fileToSave))) {
                 writer.println("Name,Amount,Category,Account,Criticality,TransactionDate,CreatedTime,Status");
                 for (Transaction tx : transactions) {
+                    // DEBUG LOG: Print transaction fields to console
+                    System.out.printf(
+                            "Exporting Tx: name='%s', amount=%.2f, category='%s', account='%s', criticality='%s', transactionDate='%s', createdTime='%s', status='%s'%n",
+                            tx.name,
+                            tx.amount,
+                            tx.category,
+                            tx.account,
+                            tx.criticality,
+                            tx.transactionDate,
+                            tx.createdTime,
+                            (tx.status != null ? tx.status : "")
+                    );
+
                     writer.printf("%s,%.2f,%s,%s,%s,%s,%s,%s%n",
                             escapeCsv(tx.name),
                             tx.amount,
