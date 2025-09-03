@@ -451,12 +451,15 @@ public class BudgetBreakdownApp extends JFrame {
     }
 
     private void uploadCSV() {
+        File defaultDir = new File("/Users/joshuareid/Library/Mobile Documents/com~apple~CloudDocs/Documents/Personal/WhatsMyBudget");
         JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setCurrentDirectory(defaultDir);
+
         int option = fileChooser.showOpenDialog(this);
 
         if (option == JFileChooser.APPROVE_OPTION) {
             File csvFile = fileChooser.getSelectedFile();
-            importCSV(csvFile); // <-- NEW METHOD
+            importCSV(csvFile);
             Map<String, Map<String, Map<String, Double>>> breakdown = calculateBreakdown(lastTransactions);
             showResults(breakdown);
         }
