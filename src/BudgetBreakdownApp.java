@@ -503,9 +503,9 @@ public class BudgetBreakdownApp extends JFrame {
                 String name = parts[0].trim();
                 double amount = parseAmount(parts[1].trim());
                 String category = parts[2].trim();
-                String account = parts[3].trim();
-                String criticality = parts[4].trim();
-                String transactionDate = parts[5].trim();
+                String criticality = parts[3].trim();
+                String transactionDate = parts[4].trim();
+                String account = parts[5].trim();
                 String createdTime = parts[6].trim();
                 String status = parts[7].trim().toLowerCase();
 

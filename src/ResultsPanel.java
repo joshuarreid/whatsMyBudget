@@ -224,6 +224,7 @@ public class ResultsPanel extends JPanel {
 
     private void showWeeklyBreakdown(String person, String category) {
         // Filter transactions for this person and category, current month
+        System.out.println("[DEBUG] showWeeklyBreakdown called for person: " + person + ", category: " + category);
         List<Transaction> filtered = new ArrayList<>();
         Calendar now = Calendar.getInstance();
         int year = now.get(Calendar.YEAR);
@@ -231,11 +232,18 @@ public class ResultsPanel extends JPanel {
 
         for (Transaction tx : lastTransactions) {
             String txPerson = tx.account.trim().equalsIgnoreCase("joint") ? person : tx.account.trim();
-            if (!txPerson.equalsIgnoreCase(person)) continue;
-            if (!tx.category.equalsIgnoreCase(category)) continue;
+            System.out.println("[DEBUG] Checking transaction: " + tx.category + " | " + txPerson + " | " + tx.transactionDate);
+            if (!txPerson.equalsIgnoreCase(person)) {
+                System.out.println("[DEBUG] Skipped: person mismatch (" + txPerson + ")");
+                continue;
+            }
+            //if (!tx.category.equalsIgnoreCase(category)) continue;
+            if (!tx.category.trim().equalsIgnoreCase(category.trim())) {
+                System.out.println("[DEBUG] Skipped: category mismatch (" + tx.category + ")");
+                continue;
+            }
 
-            Calendar txDate = getTxDate(tx.transactionDate); // <-- uses Transaction Date now
-            if (txDate.get(Calendar.YEAR) != year || txDate.get(Calendar.MONTH) != month) continue;
+            System.out.println("[DEBUG] Included transaction: " + tx.category + " | " + txPerson + " | " + tx.transactionDate);
             filtered.add(tx);
         }
 
