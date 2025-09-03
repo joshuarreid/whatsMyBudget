@@ -501,12 +501,23 @@ public class BudgetBreakdownApp extends JFrame {
                 return;
             }
 
+//            String[] headers = splitCSVLine(headerLine);
+//            Map<String, Integer> colIndex = new HashMap<>();
+//            for (int i = 0; i < headers.length; i++) {
+//                colIndex.put(headers[i].trim().toLowerCase(), i);
+//            }
+
+            // **REPLACE WITH THIS:**
             String[] headers = splitCSVLine(headerLine);
             Map<String, Integer> colIndex = new HashMap<>();
             for (int i = 0; i < headers.length; i++) {
-                colIndex.put(headers[i].trim().toLowerCase(), i);
+                // Remove BOM and invisible/control characters, trim, lowercase
+                String cleanHeader = headers[i].replaceAll("\\p{C}", "").trim().toLowerCase();
+                colIndex.put(cleanHeader, i);
             }
             System.out.println("CSV Import: Detected columns = " + colIndex);
+
+
 
             String line;
             int lineNum = 1;
@@ -695,33 +706,61 @@ public class BudgetBreakdownApp extends JFrame {
         List<Transaction> newTransactions = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
             String line = br.readLine(); // header
+            int row = 1;
             while ((line = br.readLine()) != null) {
+                row++;
                 if (line.trim().isEmpty() || line.startsWith(",")) continue;
                 String[] parts = splitCSVLine(line);
                 if (parts.length < 8) continue;
-                String name = parts[0].trim();
-                double amount = parseAmount(parts[1].trim());
-                String category = parts[2].trim();
-                String account = parts[3].trim();
-                String criticality = parts[4].trim();
-                String transactionDate = parts[5].trim();
-                String createdTime = parts[6].trim();
-                String status = parts[7].trim().toLowerCase();
+
+                // ---- FIXED FIELD MAPPING FOR YOUR CSV ----
+                String name           = parts[0].trim();
+                double amount         = parseAmount(parts[1].trim());
+                String category       = parts[2].trim();
+                String criticality    = parts[3].trim();
+                String transactionDate= parts[4].trim();
+                String account        = parts[5].trim();
+                String createdTime    = parts[6].trim();
+                String status         = parts[7].trim().toLowerCase();
+
+                // Print incoming transaction
+                System.out.printf(
+                        "Import Row %d: name='%s', amount=%.2f, category='%s', criticality='%s', transactionDate='%s', account='%s', createdTime='%s', status='%s'%n",
+                        row, name, amount, category, criticality, transactionDate, account, createdTime, status
+                );
+                System.out.println("  lastTransactions.size() = " + lastTransactions.size());
 
                 if (!status.equals("active")) {
                     Transaction tx = new Transaction(
                             name, amount, category, account, criticality, transactionDate, createdTime, status
                     );
-                    if (!isDuplicateTransaction(tx, lastTransactions)) {
+
+                    // Print comparison for duplicates
+                    boolean isDup = false;
+                    for (Transaction other : lastTransactions) {
+                        boolean match =
+                                tx.name.trim().equalsIgnoreCase(other.name.trim()) &&
+                                        Double.compare(tx.amount, other.amount) == 0 &&
+                                        tx.transactionDate.trim().equalsIgnoreCase(other.transactionDate.trim()) &&
+                                        tx.category.trim().equalsIgnoreCase(other.category.trim());
+                        System.out.printf("    Compare to: name='%s', amount=%.2f, category='%s', transactionDate='%s' | Match? %b%n",
+                                other.name, other.amount, other.category, other.transactionDate, match);
+                        if (match) {
+                            isDup = true;
+                            System.out.println("    --> Duplicate found! Skipping.");
+                            break;
+                        }
+                    }
+
+                    if (!isDup) {
+                        System.out.println("  No duplicate, adding to newTransactions.");
                         newTransactions.add(tx);
                     }
                 }
-                // If you want to also check for new projections, add similar logic for projectedExpenses.
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error parsing CSV: " + ex.getMessage());
         }
-        // Add only new transactions to your existing list
         lastTransactions.addAll(newTransactions);
         JOptionPane.showMessageDialog(this, newTransactions.size() + " transactions imported");
     }
