@@ -495,24 +495,33 @@ public class BudgetBreakdownApp extends JFrame {
         List<Transaction> importedTransactions = new ArrayList<>();
         List<ProjectedExpense> importedProjected = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
-            String line = br.readLine(); // header
+            String headerLine = br.readLine();
+            if (headerLine == null) return;
+
+            String[] headers = splitCSVLine(headerLine);
+            Map<String, Integer> colIndex = new HashMap<>();
+            for (int i = 0; i < headers.length; i++) {
+                colIndex.put(headers[i].trim().toLowerCase(), i);
+            }
+
+            String line;
             while ((line = br.readLine()) != null) {
-                if (line.trim().isEmpty() || line.startsWith(",")) continue;
+                if (line.trim().isEmpty() || line.replace(",", "").isEmpty()) continue;
                 String[] parts = splitCSVLine(line);
-                if (parts.length < 8) continue; // 8 fields expected
-                String name = parts[0].trim();
-                double amount = parseAmount(parts[1].trim());
-                String category = parts[2].trim();
-                String criticality = parts[3].trim();
-                String transactionDate = parts[4].trim();
-                String account = parts[5].trim();
-                String createdTime = parts[6].trim();
-                String status = parts[7].trim().toLowerCase();
+
+                String name = getField(parts, colIndex, "name");
+                double amount = parseAmount(getField(parts, colIndex, "amount"));
+                String category = getField(parts, colIndex, "category");
+                String account = getField(parts, colIndex, "account");
+                String criticality = getField(parts, colIndex, "criticality");
+                String transactionDate = getField(parts, colIndex, "transactiondate");
+                String createdTime = getField(parts, colIndex, "createdtime");
+                String status = getField(parts, colIndex, "status").toLowerCase();
 
                 if (status.equals("active")) {
                     // Add to projectedExpenses
                     importedProjected.add(new ProjectedExpense(
-                            account, // person
+                            account,
                             criticality,
                             category,
                             amount,
@@ -537,6 +546,15 @@ public class BudgetBreakdownApp extends JFrame {
         }
         lastTransactions = importedTransactions;
         projectedExpenses = importedProjected;
+    }
+
+    private String getField(String[] parts, Map<String, Integer> colIndex, String key) {
+        Integer idx = colIndex.get(key);
+        if (idx != null && idx < parts.length) {
+            return parts[idx].trim();
+        } else {
+            return ""; // Default if missing
+        }
     }
 
     private String[] splitCSVLine(String line) {
