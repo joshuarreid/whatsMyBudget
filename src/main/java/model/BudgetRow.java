@@ -1,8 +1,13 @@
 package model;
 
+import org.slf4j.Logger;
+import util.AppLogger;
+
 import java.util.Objects;
 
 public class BudgetRow {
+    private static final Logger logger = AppLogger.getLogger(BudgetRow.class);
+
     private String name;
     private String amount;
     private String category;
@@ -27,36 +32,62 @@ public class BudgetRow {
         this.status = status;
         this.createdTime = createdTime;
         this.paymentMethod = paymentMethod;
+        logger.debug("Created BudgetRow: {}", this);
     }
 
-    // Getters and setters for all fields
-
     public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public void setName(String name) {
+        logger.debug("Setting name from '{}' to '{}'", this.name, name);
+        this.name = name;
+    }
 
     public String getAmount() { return amount; }
-    public void setAmount(String amount) { this.amount = amount; }
+    public void setAmount(String amount) {
+        logger.debug("Setting amount from '{}' to '{}'", this.amount, amount);
+        this.amount = amount;
+    }
 
     public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public void setCategory(String category) {
+        logger.debug("Setting category from '{}' to '{}'", this.category, category);
+        this.category = category;
+    }
 
     public String getCriticality() { return criticality; }
-    public void setCriticality(String criticality) { this.criticality = criticality; }
+    public void setCriticality(String criticality) {
+        logger.debug("Setting criticality from '{}' to '{}'", this.criticality, criticality);
+        this.criticality = criticality;
+    }
 
     public String getTransactionDate() { return transactionDate; }
-    public void setTransactionDate(String transactionDate) { this.transactionDate = transactionDate; }
+    public void setTransactionDate(String transactionDate) {
+        logger.debug("Setting transactionDate from '{}' to '{}'", this.transactionDate, transactionDate);
+        this.transactionDate = transactionDate;
+    }
 
     public String getAccount() { return account; }
-    public void setAccount(String account) { this.account = account; }
+    public void setAccount(String account) {
+        logger.debug("Setting account from '{}' to '{}'", this.account, account);
+        this.account = account;
+    }
 
     public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public void setStatus(String status) {
+        logger.debug("Setting status from '{}' to '{}'", this.status, status);
+        this.status = status;
+    }
 
     public String getCreatedTime() { return createdTime; }
-    public void setCreatedTime(String createdTime) { this.createdTime = createdTime; }
+    public void setCreatedTime(String createdTime) {
+        logger.debug("Setting createdTime from '{}' to '{}'", this.createdTime, createdTime);
+        this.createdTime = createdTime;
+    }
 
     public String getPaymentMethod() { return paymentMethod; }
-    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) {
+        logger.debug("Setting paymentMethod from '{}' to '{}'", this.paymentMethod, paymentMethod);
+        this.paymentMethod = paymentMethod;
+    }
 
     @Override
     public boolean equals(Object o) {
