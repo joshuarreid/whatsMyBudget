@@ -2,6 +2,7 @@ package service;
 
 import com.opencsv.exceptions.CsvValidationException;
 import model.BudgetRow;
+import org.springframework.stereotype.Service;
 import util.BudgetRowConverter;
 import util.AppLogger;
 import org.slf4j.Logger;
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 /**
  * Implements CSVFileService for BudgetRow objects.
  */
+@Service
 public class BudgetFileService implements CSVFileService<BudgetRow> {
     private static final Logger logger = AppLogger.getLogger(BudgetFileService.class);
 

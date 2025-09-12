@@ -5,6 +5,7 @@ import com.opencsv.CSVWriter;
 import com.opencsv.exceptions.CsvValidationException;
 import model.ProjectedRow;
 import org.slf4j.Logger;
+import org.springframework.stereotype.Service;
 import util.AppLogger;
 import util.ProjectedRowConverter;
 
@@ -16,6 +17,7 @@ import java.util.stream.Collectors;
 /**
  * Implements CSVFileService for ProjectedRow objects.
  */
+@Service
 public class ProjectedFileService implements CSVFileService<ProjectedRow> {
     private static final Logger logger = AppLogger.getLogger(ProjectedFileService.class);
 

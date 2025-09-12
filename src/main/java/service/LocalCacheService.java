@@ -1,6 +1,7 @@
 package service;
 
 import org.slf4j.Logger;
+import org.springframework.stereotype.Service;
 import util.AppLogger;
 
 import java.io.*;
@@ -10,6 +11,7 @@ import java.util.*;
  * LocalCacheService manages a simple configuration property file in the user's home directory
  * for local caching of app settings.
  */
+@Service
 public class LocalCacheService {
     private static final Logger logger = AppLogger.getLogger(LocalCacheService.class);
     private static final String APP_DIR = ".whatsmybudget";

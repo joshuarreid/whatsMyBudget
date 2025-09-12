@@ -35,6 +35,19 @@ public class BudgetRow {
         logger.debug("Created BudgetRow: {}", this);
     }
 
+    public BudgetRow(String name, String amount, String category, String criticality, String transactionDate, String account, String status, String createdTime) {
+        this.name = name;
+        this.amount = amount;
+        this.category = category;
+        this.criticality = criticality;
+        this.transactionDate = transactionDate;
+        this.account = account;
+        this.status = status;
+        this.createdTime = createdTime;
+        this.paymentMethod = null;
+        logger.debug("Created BudgetRow (8-arg): {}", this);
+    }
+
     public String getName() { return name; }
     public void setName(String name) {
         logger.debug("Setting name from '{}' to '{}'", this.name, name);
