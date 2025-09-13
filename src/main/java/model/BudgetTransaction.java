@@ -19,6 +19,7 @@ public class BudgetTransaction extends BudgetRow {
     private final String statementPeriod;
     private final LocalDate parsedTransactionDate;
 
+
     /**
      * Constructs a BudgetTransaction with all required fields, including statementPeriod and parses the date.
      *

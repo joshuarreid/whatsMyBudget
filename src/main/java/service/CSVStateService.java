@@ -2,11 +2,12 @@ package service;
 
 import model.BudgetRow;
 import model.BudgetTransaction;
-import model.ProjectedRow;
+import model.ProjectedTransaction;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import util.AppLogger;
+import util.ProjectedRowConverter;
 
 import java.io.IOException;
 import java.nio.file.*;
@@ -110,34 +111,75 @@ public class CSVStateService {
 
     /**
      * Loads all projected/future transactions.
-     * @return list of ProjectedRow
+     * @return list of ProjectedTransaction
      */
-    public List<ProjectedRow> getProjectedTransactions() {
+    public List<ProjectedTransaction> getProjectedTransactions() {
         logger.info("Entering getProjectedTransactions()");
-        List<ProjectedRow> projections = projectedFileService.readAll();
+        List<BudgetRow> rows = projectedFileService.readAll();
+        List<ProjectedTransaction> projections = rows.stream()
+                .map(row -> row instanceof ProjectedTransaction
+                        ? (ProjectedTransaction) row
+                        : convertToProjectedTransaction(row))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
         logger.info("Loaded {} projected transactions.", projections.size());
         return projections;
     }
 
     /**
      * Adds a projected/future transaction.
-     * @param projectedRow ProjectedRow to add
+     * @param projectedTx ProjectedTransaction to add
      * @return true if successful
      */
-    public boolean addProjectedTransaction(ProjectedRow projectedRow) {
-        logger.info("Entering addProjectedTransaction(): {}", projectedRow);
-        if (projectedRow == null) {
+    public boolean addProjectedTransaction(ProjectedTransaction projectedTx) {
+        logger.info("Entering addProjectedTransaction(): {}", projectedTx);
+        if (projectedTx == null) {
             logger.error("Cannot add null projected transaction.");
             return false;
         }
         try {
-            projectedFileService.add(projectedRow);
+            projectedFileService.add(projectedTx);
             logger.info("Added projected transaction successfully.");
             return true;
         } catch (Exception e) {
             logger.error("Failed to add projected transaction: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Updates a projected transaction in the projections file by key-value lookup.
+     * @param key   field for matching (e.g., "Name")
+     * @param value value to match
+     * @param updatedTx updated projected transaction
+     * @return true if update succeeded
+     */
+    public boolean updateProjectedTransaction(String key, String value, ProjectedTransaction updatedTx) {
+        logger.info("Entering updateProjectedTransaction(): key={}, value={}, updatedTx={}", key, value, updatedTx);
+        if (key == null || value == null || updatedTx == null) {
+            logger.error("Null argument given to updateProjectedTransaction.");
+            return false;
+        }
+        boolean updated = projectedFileService.update(key, value, updatedTx);
+        logger.info("Projected transaction update result: {}", updated);
+        return updated;
+    }
+
+    /**
+     * Deletes a projected transaction from the projections file by key-value lookup.
+     * @param key   field for matching
+     * @param value value to match
+     * @return true if deleted
+     */
+    public boolean deleteProjectedTransaction(String key, String value) {
+        logger.info("Entering deleteProjectedTransaction(): key={}, value={}", key, value);
+        if (key == null || value == null) {
+            logger.error("Null argument to deleteProjectedTransaction.");
+            return false;
+        }
+        boolean deleted = projectedFileService.delete(key, value);
+        logger.info("Projected transaction delete result: {}", deleted);
+        return deleted;
     }
 
     /**
@@ -245,5 +287,35 @@ public class CSVStateService {
         );
         logger.info("Converted row: {}", tx);
         return tx;
+    }
+
+    /**
+     * Utility: Convert from BudgetRow to ProjectedTransaction if needed.
+     * Ensures full compatibility with data model for projections.
+     */
+    private ProjectedTransaction convertToProjectedTransaction(BudgetRow row) {
+        logger.info("Converting BudgetRow to ProjectedTransaction: {}", row);
+        try {
+            Map<String, String> map = new HashMap<>();
+            map.put("Name", row.getName());
+            map.put("Amount", row.getAmount());
+            map.put("Category", row.getCategory());
+            map.put("Criticality", row.getCriticality());
+            map.put("Transaction Date", row.getTransactionDate());
+            map.put("Account", row.getAccount());
+            map.put("status", row.getStatus());
+            map.put("Created time", row.getCreatedTime());
+            // For projections, Statement Period is required
+            String statementPeriod = row instanceof ProjectedTransaction
+                    ? ((ProjectedTransaction) row).getStatementPeriod()
+                    : getCurrentStatementPeriod();
+            map.put("Statement Period", statementPeriod);
+            ProjectedTransaction tx = ProjectedRowConverter.mapToProjectedTransaction(map);
+            logger.info("Converted row: {}", tx);
+            return tx;
+        } catch (Exception e) {
+            logger.error("Failed to convert BudgetRow to ProjectedTransaction: {}", e.getMessage(), e);
+            return null;
+        }
     }
 }

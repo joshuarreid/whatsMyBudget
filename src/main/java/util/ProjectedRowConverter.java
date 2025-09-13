@@ -1,77 +1,85 @@
 package util;
 
-import model.ProjectedRow;
+import model.ProjectedTransaction;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import util.AppLogger;
 
 import java.util.*;
 
 /**
- * Converter for ProjectedRow objects and CSV map representations.
+ * Converts between CSV map and ProjectedTransaction objects for projections file.
+ * Provides robust handling and static headers.
  */
-public class ProjectedRowConverter implements RowConverter<ProjectedRow> {
-    private static final Logger logger = LoggerFactory.getLogger(ProjectedRowConverter.class);
+public class ProjectedRowConverter implements RowConverter<ProjectedTransaction> {
+    private static final Logger logger = AppLogger.getLogger(ProjectedRowConverter.class);
 
     private static final List<String> HEADERS = Arrays.asList(
-            "Name", "Amount", "Category", "Criticality", "Projected Date",
-            "Account", "status", "Created time", "Payment Method", "Notes"
+            "Name", "Amount", "Category", "Criticality", "Transaction Date",
+            "Account", "status", "Created time", "Statement Period"
     );
 
+    /**
+     * Converts a CSV map to a ProjectedTransaction.
+     * @param map CSV field map
+     * @return ProjectedTransaction object
+     */
     @Override
-    public ProjectedRow mapToRow(Map<String, String> map) {
-        ProjectedRow row = new ProjectedRow(
-                map.getOrDefault("Name", ""),
-                map.getOrDefault("Amount", ""),
-                map.getOrDefault("Category", ""),
-                map.getOrDefault("Criticality", ""),
-                map.getOrDefault("Projected Date", ""),
-                map.getOrDefault("Account", ""),
-                map.getOrDefault("status", ""),
-                map.getOrDefault("Created time", ""),
-                map.getOrDefault("Payment Method", ""),
-                map.getOrDefault("Notes", "")
-        );
-        logger.debug("Mapped CSV map to ProjectedRow: {}", row);
-        return row;
+    public ProjectedTransaction mapToRow(Map<String, String> map) {
+        logger.info("mapToRow called with map: {}", map);
+        try {
+            ProjectedTransaction tx = new ProjectedTransaction(
+                    map.getOrDefault("Name", ""),
+                    map.getOrDefault("Amount", ""),
+                    map.getOrDefault("Category", ""),
+                    map.getOrDefault("Criticality", ""),
+                    map.getOrDefault("Transaction Date", ""),
+                    map.getOrDefault("Account", ""),
+                    map.getOrDefault("status", ""),
+                    map.getOrDefault("Created time", ""),
+                    map.getOrDefault("Statement Period", "")
+            );
+            logger.info("Successfully mapped to ProjectedTransaction: {}", tx);
+            return tx;
+        } catch (Exception e) {
+            logger.error("Failed to map mapToRow in ProjectedRowConverter: {}", e.getMessage(), e);
+            return null;
+        }
     }
 
+    /**
+     * Converts a ProjectedTransaction to a CSV map.
+     * @param tx ProjectedTransaction object
+     * @return Map of CSV fields
+     */
     @Override
-    public Map<String, String> rowToMap(ProjectedRow row) {
+    public Map<String, String> rowToMap(ProjectedTransaction tx) {
+        logger.info("rowToMap called for ProjectedTransaction: {}", tx);
         Map<String, String> map = new LinkedHashMap<>();
-        map.put("Name", row.getName());
-        map.put("Amount", row.getAmount());
-        map.put("Category", row.getCategory());
-        map.put("Criticality", row.getCriticality());
-        map.put("Projected Date", row.getProjectedDate());
-        map.put("Account", row.getAccount());
-        map.put("status", row.getStatus());
-        map.put("Created time", row.getCreatedTime());
-        map.put("Payment Method", row.getPaymentMethod());
-        map.put("Notes", row.getNotes());
-        logger.debug("Mapped ProjectedRow to CSV map: {}", map);
+        map.put("Name", tx.getName());
+        map.put("Amount", tx.getAmount());
+        map.put("Category", tx.getCategory());
+        map.put("Criticality", tx.getCriticality());
+        map.put("Transaction Date", tx.getTransactionDate());
+        map.put("Account", tx.getAccount());
+        map.put("status", tx.getStatus());
+        map.put("Created time", tx.getCreatedTime());
+        map.put("Statement Period", tx.getStatementPeriod());
         return map;
     }
 
-    public List<String> headers() {
-        logger.debug("Retrieved ProjectedRow headers: {}", HEADERS);
+    /**
+     * Returns the headers for projections CSV.
+     */
+    public static List<String> headers() {
         return HEADERS;
     }
 
-    // Static utility methods for compatibility with static-style usage
-    public static ProjectedRow mapToProjectedRow(Map<String, String> map) {
-        ProjectedRow row = new ProjectedRowConverter().mapToRow(map);
-        logger.debug("Static: Mapped CSV map to ProjectedRow: {}", row);
-        return row;
+    // Static utility for compatibility
+    public static ProjectedTransaction mapToProjectedTransaction(Map<String, String> map) {
+        return new ProjectedRowConverter().mapToRow(map);
     }
 
-    public static Map<String, String> projectedRowToMap(ProjectedRow row) {
-        Map<String, String> map = new ProjectedRowConverter().rowToMap(row);
-        logger.debug("Static: Mapped ProjectedRow to CSV map: {}", map);
-        return map;
-    }
-
-    public static List<String> headersStatic() {
-        logger.debug("Static: Retrieved ProjectedRow headers: {}", HEADERS);
-        return HEADERS;
+    public static Map<String, String> projectedRowToMap(ProjectedTransaction tx) {
+        return new ProjectedRowConverter().rowToMap(tx);
     }
 }
