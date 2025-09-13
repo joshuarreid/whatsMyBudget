@@ -20,7 +20,6 @@ public class WeeklyBreakdownPanel extends JPanel {
     private final Logger logger = AppLogger.getLogger(getClass());
     private final JTable table;
     private final DefaultTableModel tableModel;
-    private final JLabel titleLabel;
     private final String categoryName;
     private final List<BudgetTransaction> transactions;
     private final LocalDate statementStartDate;
@@ -51,10 +50,6 @@ public class WeeklyBreakdownPanel extends JPanel {
         this.statementStartDate = statementStartDate;
         this.statementEndDate = statementEndDate;
 
-        // Title label
-        titleLabel = new JLabel(this.categoryName + " Weekly Breakdown", SwingConstants.CENTER);
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
-        this.add(titleLabel, BorderLayout.NORTH);
 
         // Table setup
         this.tableModel = new DefaultTableModel(new String[] {"Week", "Total Amount"}, 0) {

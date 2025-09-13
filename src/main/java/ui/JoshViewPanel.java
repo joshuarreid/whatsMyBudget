@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 public class JoshViewPanel extends IndividualViewPanel {
     private static final Logger logger = AppLogger.getLogger(JoshViewPanel.class);
 
-    private List<BudgetTransaction> allTransactions;
+    private BudgetTransactionList allTransactionList; // Now holds the canonical list for this panel
 
     /**
      * Constructs the JoshViewPanel with category summary panels.
@@ -42,9 +42,13 @@ public class JoshViewPanel extends IndividualViewPanel {
      */
     public void setTransactions(List<BudgetTransaction> transactions) {
         logger.info("setTransactions(List) called on JoshViewPanel with {} transaction(s)", transactions == null ? 0 : transactions.size());
-        this.allTransactions = transactions;
-        getEssentialPanel().setTransactions(transactions);
-        getNonEssentialPanel().setTransactions(transactions);
+        if (transactions != null) {
+            this.allTransactionList = new BudgetTransactionList(transactions, "JoshViewPanel Transactions");
+        } else {
+            this.allTransactionList = new BudgetTransactionList(null, "JoshViewPanel Transactions");
+        }
+        getEssentialPanel().setTransactions(this.allTransactionList);
+        getNonEssentialPanel().setTransactions(this.allTransactionList);
     }
 
     /**
@@ -54,11 +58,11 @@ public class JoshViewPanel extends IndividualViewPanel {
     public void setTransactions(BudgetTransactionList transactionList) {
         logger.info("setTransactions(BudgetTransactionList) called on JoshViewPanel");
         if (transactionList == null) {
-            this.allTransactions = null;
+            this.allTransactionList = new BudgetTransactionList(null, "JoshViewPanel Transactions");
             getEssentialPanel().setTransactions((List<BudgetTransaction>) null);
             getNonEssentialPanel().setTransactions((List<BudgetTransaction>) null);
         } else {
-            this.allTransactions = transactionList.getTransactions();
+            this.allTransactionList = transactionList;
             getEssentialPanel().setTransactions(transactionList);
             getNonEssentialPanel().setTransactions(transactionList);
         }
@@ -71,20 +75,22 @@ public class JoshViewPanel extends IndividualViewPanel {
      */
     private void handleCategoryRowClick(String category, boolean isEssential) {
         logger.info("handleCategoryRowClick called for category '{}', isEssential={}", category, isEssential);
-        if (allTransactions == null || allTransactions.isEmpty()) {
-            logger.error("No transactions available in JoshViewPanel for breakdown.");
+
+        if (allTransactionList == null) {
+            logger.error("No transaction list available in JoshViewPanel for breakdown.");
             JOptionPane.showMessageDialog(this, "No transactions available for breakdown.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        // Filter for the right criticality and category
-        List<BudgetTransaction> filtered = allTransactions.stream()
+        String criticality = isEssential ? "Essential" : "NonEssential";
+        List<BudgetTransaction> personalized = allTransactionList.getPersonalizedTransactions("Josh", criticality);
+        logger.info("Personalized transaction list for Josh with criticality '{}': {} transactions", criticality, personalized.size());
+
+        // Filter for the selected category
+        List<BudgetTransaction> filtered = personalized.stream()
                 .filter(tx -> category.equals(tx.getCategory()))
-                .filter(tx -> isEssential
-                        ? "Essential".equalsIgnoreCase(tx.getCriticality())
-                        : "NonEssential".equalsIgnoreCase(tx.getCriticality()))
                 .collect(Collectors.toList());
-        logger.info("Filtered {} transactions for category '{}' (isEssential={})", filtered.size(), category, isEssential);
+        logger.info("Filtered {} personalized transactions for category '{}' (isEssential={})", filtered.size(), category, isEssential);
 
         if (filtered.isEmpty()) {
             logger.warn("No transactions found for category '{}' (isEssential={})", category, isEssential);

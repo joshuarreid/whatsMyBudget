@@ -304,6 +304,41 @@ public class BudgetTransactionList implements Serializable {
         }
     }
 
+    // ------------------- Personalized Transaction Halving Logic -------------------
+
+    /**
+     * Returns transactions for a given individual, including their half of all Joint transactions (amount halved).
+     * This should be used by Josh/Anna views and drilldowns to ensure correct split for all summaries.
+     * @param individual The individual account (e.g., "Josh", "Anna")
+     * @param criticality Criticality filter ("Essential", "NonEssential", or null for all)
+     * @return List of BudgetTransaction, with Joint transactions halved and attributed to the individual
+     */
+    public List<BudgetTransaction> getPersonalizedTransactions(String individual, String criticality) {
+        logger.info("getPersonalizedTransactions called for individual='{}', criticality='{}'", individual, criticality);
+        List<BudgetTransaction> personalized = new ArrayList<>();
+        if (individual == null) {
+            logger.warn("getPersonalizedTransactions called with null individual; returning original list");
+            return new ArrayList<>(transactions);
+        }
+        for (BudgetTransaction tx : transactions) {
+            boolean matchesCriticality = (criticality == null || criticality.equalsIgnoreCase(tx.getCriticality()));
+            if (individual.equalsIgnoreCase(tx.getAccount())) {
+                if (matchesCriticality) {
+                    personalized.add(tx);
+                }
+            } else if ("Joint".equalsIgnoreCase(tx.getAccount())) {
+                if (matchesCriticality) {
+                    BudgetTransaction halfTx = splitJointTransactionForAccount(tx, individual);
+                    if (halfTx != null) {
+                        personalized.add(halfTx);
+                    }
+                }
+            }
+        }
+        logger.info("getPersonalizedTransactions returning {} transactions for '{}'", personalized.size(), individual);
+        return personalized;
+    }
+
     // ------------------- Totals and Amounts -------------------
 
     /**
