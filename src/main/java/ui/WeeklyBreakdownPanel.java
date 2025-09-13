@@ -7,114 +7,137 @@ import util.AppLogger;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.LocalDate;
-import java.time.temporal.WeekFields;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /**
- * Panel that summarizes and displays totals per week for a given category, account, or criticality.
- * Ready for drilldown (row click to see underlying transactions).
+ * Panel that summarizes and displays weekly totals for a given category, based on statement-relative weeks.
+ * Each week is 7 days, starting from statementStartDate. The last week may be shorter.
  */
 public class WeeklyBreakdownPanel extends JPanel {
     private final Logger logger = AppLogger.getLogger(getClass());
     private final JTable table;
     private final DefaultTableModel tableModel;
-    private String statementPeriod; // Optionally use for filtering
+    private final JLabel titleLabel;
+    private final String categoryName;
+    private final List<BudgetTransaction> transactions;
+    private final LocalDate statementStartDate;
+    private final LocalDate statementEndDate;
 
     /**
-     * Constructs a weekly breakdown panel.
+     * Constructs a WeeklyBreakdownPanel for the given category and transactions, using statement-relative weeks.
+     * @param categoryName        Name of the category (not null)
+     * @param transactions        Filtered list of transactions for this category (not null)
+     * @param statementStartDate  Start date of the statement period (not null)
+     * @param statementEndDate    End date of the statement period (not null, inclusive)
      */
-    public WeeklyBreakdownPanel() {
+    public WeeklyBreakdownPanel(String categoryName, List<BudgetTransaction> transactions, LocalDate statementStartDate, LocalDate statementEndDate) {
         super(new BorderLayout());
-        logger.info("Creating WeeklyBreakdownPanel");
+        logger.info("Creating WeeklyBreakdownPanel for category='{}', statementStartDate={}, statementEndDate={}, transactions={}",
+                categoryName, statementStartDate, statementEndDate, transactions == null ? 0 : transactions.size());
+        if (categoryName == null || statementStartDate == null || statementEndDate == null || transactions == null) {
+            logger.error("Null input(s) to WeeklyBreakdownPanel. categoryName={}, statementStartDate={}, statementEndDate={}, transactions={}",
+                    categoryName, statementStartDate, statementEndDate, transactions == null ? "null" : transactions.size());
+            throw new IllegalArgumentException("Category name, transactions, statement start and end dates must not be null.");
+        }
+        if (statementEndDate.isBefore(statementStartDate)) {
+            logger.error("statementEndDate {} is before statementStartDate {}", statementEndDate, statementStartDate);
+            throw new IllegalArgumentException("statementEndDate must not be before statementStartDate");
+        }
+        this.categoryName = categoryName;
+        this.transactions = transactions;
+        this.statementStartDate = statementStartDate;
+        this.statementEndDate = statementEndDate;
+
+        // Title label
+        titleLabel = new JLabel(this.categoryName + " Weekly Breakdown", SwingConstants.CENTER);
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        this.add(titleLabel, BorderLayout.NORTH);
+
+        // Table setup
         this.tableModel = new DefaultTableModel(new String[] {"Week", "Total Amount"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
         };
         this.table = new JTable(tableModel);
         this.add(new JScrollPane(table), BorderLayout.CENTER);
+
+        updateTable();
     }
 
     /**
-     * Sets the transactions for weekly breakdown, filtered as needed.
-     * @param transactions List of BudgetTransaction (not null)
-     * @param filters      Optional predicates to apply (e.g., by category, account, criticality)
+     * Recomputes and displays the weekly breakdown table, using statement-relative weeks.
      */
-    public void setTransactions(List<BudgetTransaction> transactions, Predicate<BudgetTransaction>... filters) {
-        logger.info("setTransactions called with {} transaction(s)", transactions == null ? 0 : transactions.size());
-        if (transactions == null) {
-            logger.error("Received null transactions list; clearing table.");
-            tableModel.setRowCount(0);
+    private void updateTable() {
+        logger.info("updateTable called for category='{}' with {} transaction(s)", categoryName, transactions.size());
+        tableModel.setRowCount(0);
+        if (transactions.isEmpty()) {
+            logger.warn("No transactions provided for category '{}'. Table will remain empty.", categoryName);
             return;
         }
-        List<BudgetTransaction> filtered = transactions;
-        if (filters != null) {
-            for (Predicate<BudgetTransaction> filter : filters) {
-                if (filter != null) filtered = filtered.stream().filter(filter).collect(Collectors.toList());
+
+        // Map: weekIndex -> totalAmount
+        Map<Integer, Double> weekTotals = new LinkedHashMap<>();
+        Map<Integer, LocalDate[]> weekRanges = getWeekRanges(statementStartDate, statementEndDate);
+
+        // Assign each transaction to a week, based on days since statement start
+        for (BudgetTransaction tx : transactions) {
+            LocalDate txDate = tx.getDate();
+            if (txDate == null) {
+                logger.warn("Transaction '{}' has null parsed date; skipping.", tx.getName());
+                continue;
             }
+            if (txDate.isBefore(statementStartDate) || txDate.isAfter(statementEndDate)) {
+                logger.warn("Transaction '{}' (date {}) outside statement period ({} to {}); skipping.", tx.getName(), txDate, statementStartDate, statementEndDate);
+                continue;
+            }
+            int weekIndex = getStatementWeekIndex(txDate, statementStartDate);
+            double amt = tx.getAmountValue();
+            weekTotals.merge(weekIndex, amt, Double::sum);
+            logger.debug("Added amount ${} to week {} (date {}), tx='{}'", amt, weekIndex, txDate, tx.getName());
         }
-        logger.info("Filtered to {} transaction(s) after applying predicates", filtered.size());
-        Map<String, Double> weeklyTotals = groupByWeek(filtered);
-        updateTable(weeklyTotals);
+
+        // Build table rows for each week in the statement period
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("MMM d");
+        int totalWeeks = weekRanges.size();
+        for (int week = 1; week <= totalWeeks; week++) {
+            LocalDate[] range = weekRanges.get(week);
+            String label = String.format("Week %d (%s–%s)", week, dtf.format(range[0]), dtf.format(range[1]));
+            Double total = weekTotals.getOrDefault(week, 0.0);
+            tableModel.addRow(new Object[] {label, String.format("$%.2f", total)});
+            logger.info("Table row: {} -> {}", label, String.format("$%.2f", total));
+        }
+        logger.info("Weekly breakdown table complete: {} rows.", tableModel.getRowCount());
     }
 
     /**
-     * Groups transactions by week label (e.g., "2025-W36") and sums their amounts.
+     * Returns a map of weekIndex to date ranges, based on the statement period.
      */
-    private Map<String, Double> groupByWeek(List<BudgetTransaction> transactions) {
-        Map<String, Double> weekTotals = new TreeMap<>();
-        for (BudgetTransaction tx : transactions) {
-            String dateStr = tx.getTransactionDate();
-            LocalDate date = parseDate(dateStr);
-            if (date == null) {
-                logger.warn("Could not parse date '{}', skipping transaction", dateStr);
-                continue;
-            }
-            WeekFields weekFields = WeekFields.of(Locale.getDefault());
-            int weekNum = date.get(weekFields.weekOfWeekBasedYear());
-            int year = date.getYear();
-            String weekLabel = String.format("%d-W%02d", year, weekNum);
-            double amt = parseAmount(tx.getAmount());
-            weekTotals.merge(weekLabel, amt, Double::sum);
+    private Map<Integer, LocalDate[]> getWeekRanges(LocalDate start, LocalDate end) {
+        Map<Integer, LocalDate[]> weekRanges = new LinkedHashMap<>();
+        int week = 1;
+        LocalDate weekStart = start;
+        while (!weekStart.isAfter(end)) {
+            LocalDate weekEnd = weekStart.plusDays(6);
+            if (weekEnd.isAfter(end)) weekEnd = end;
+            weekRanges.put(week, new LocalDate[] {weekStart, weekEnd});
+            logger.debug("Week {}: {} to {}", week, weekStart, weekEnd);
+            weekStart = weekEnd.plusDays(1);
+            week++;
         }
-        logger.info("Grouped into {} week(s)", weekTotals.size());
-        return weekTotals;
+        return weekRanges;
     }
 
-    private void updateTable(Map<String, Double> weeklyTotals) {
-        logger.info("updateTable called with {} weeks", weeklyTotals.size());
-        tableModel.setRowCount(0);
-        for (Map.Entry<String, Double> entry : weeklyTotals.entrySet()) {
-            tableModel.addRow(new Object[] {entry.getKey(), String.format("$%.2f", entry.getValue())});
-        }
-        logger.info("Table updated with {} rows", tableModel.getRowCount());
-    }
-
-    private LocalDate parseDate(String dateStr) {
-        if (dateStr == null) return null;
-        try {
-            // Example: "September 12, 2025"
-            Date date = new SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH).parse(dateStr);
-            return date.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
-        } catch (ParseException e) {
-            logger.error("parseDate failed for '{}': {}", dateStr, e.getMessage());
-            return null;
-        }
-    }
-
-    private static double parseAmount(String amt) {
-        if (amt == null) return 0.0;
-        String clean = amt.replace("$", "").replace(",", "").trim();
-        if (clean.isEmpty()) return 0.0;
-        try {
-            return Double.parseDouble(clean);
-        } catch (NumberFormatException e) {
-            return 0.0;
-        }
+    /**
+     * Returns the statement-relative week index for a given date.
+     * Day 0-6: week 1, 7-13: week 2, etc.
+     */
+    private int getStatementWeekIndex(LocalDate date, LocalDate statementStart) {
+        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(statementStart, date);
+        int weekIndex = (int)(daysBetween / 7) + 1;
+        logger.debug("getStatementWeekIndex: date={}, statementStart={}, daysBetween={}, weekIndex={}", date, statementStart, daysBetween, weekIndex);
+        return weekIndex;
     }
 }
