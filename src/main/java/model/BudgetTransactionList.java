@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
  * Provides both flat list access and efficient category breakdown via map.
  * Supports flexible filtering by each CSV header/field and account.
  * Maintains total amount (sum) and total count of transactions for reporting.
+ * Splits "Joint" transactions in half for individual accounts (Josh, Anna).
  */
 public class BudgetTransactionList implements Serializable {
     private static final Logger logger = AppLogger.getLogger(BudgetTransactionList.class);
@@ -131,9 +132,37 @@ public class BudgetTransactionList implements Serializable {
         return filterHelper("Transaction Date", transactionDate, BudgetTransaction::getTransactionDate, account);
     }
 
+    /**
+     * Filters by account. For "Josh" or "Anna", splits joint transactions and includes half for each.
+     * @param account The account to filter by ("Josh", "Anna", "Joint", etc.)
+     * @return a new BudgetTransactionList with filtered (and split) transactions
+     */
     public BudgetTransactionList filterByAccount(String account) {
         logger.info("filterByAccount called with account='{}'", account);
-        return filterHelper("Account", account, BudgetTransaction::getAccount, null);
+        if (account == null) {
+            logger.warn("filterByAccount called with null account; returning original list");
+            return this;
+        }
+        String acct = account.trim();
+        List<BudgetTransaction> filtered = new ArrayList<>();
+        for (BudgetTransaction tx : transactions) {
+            if (acct.equalsIgnoreCase("Josh") || acct.equalsIgnoreCase("Anna")) {
+                if (tx.getAccount().equalsIgnoreCase(acct)) {
+                    filtered.add(tx);
+                } else if (tx.getAccount().equalsIgnoreCase("Joint")) {
+                    BudgetTransaction splitTx = splitJointTransactionForAccount(tx, acct);
+                    if (splitTx != null) {
+                        filtered.add(splitTx);
+                    }
+                }
+            } else {
+                if (tx.getAccount().equalsIgnoreCase(acct)) {
+                    filtered.add(tx);
+                }
+            }
+        }
+        logger.info("filterByAccount returning {} transactions for account '{}'", filtered.size(), account);
+        return new BudgetTransactionList(filtered, this.description + " (Filtered: Account=" + account + ")");
     }
 
     public BudgetTransactionList filterByStatus(String status) {
@@ -208,24 +237,71 @@ public class BudgetTransactionList implements Serializable {
             String field, String value, Function<BudgetTransaction, String> getter, String account
     ) {
         logger.info("filterHelper called with field='{}', value='{}', account='{}'", field, value, account);
-        if (value == null && account == null) {
-            logger.warn("filterHelper: Both value and account are null for '{}'; returning original list", field);
-            return this;
+        if (field.equalsIgnoreCase("Account")) {
+            // Use the account splitting logic for "Josh" and "Anna"
+            return filterByAccount(value);
         }
-        List<BudgetTransaction> filtered = transactions.stream()
-                .filter(tx -> {
-                    boolean matchesValue = (value == null ||
-                            (getter.apply(tx) != null && getter.apply(tx).trim().equalsIgnoreCase(value.trim())));
-                    boolean matchesAccount = (account == null ||
-                            (tx.getAccount() != null && tx.getAccount().trim().equalsIgnoreCase(account.trim())));
-                    return matchesValue && matchesAccount;
-                })
-                .collect(Collectors.toList());
+        List<BudgetTransaction> filtered = new ArrayList<>();
+        for (BudgetTransaction tx : transactions) {
+            boolean matchesValue = (value == null ||
+                    (getter.apply(tx) != null && getter.apply(tx).trim().equalsIgnoreCase(value.trim())));
+            if (account == null) {
+                if (matchesValue) {
+                    filtered.add(tx);
+                }
+            } else if (account.equalsIgnoreCase("Josh") || account.equalsIgnoreCase("Anna")) {
+                if (tx.getAccount().equalsIgnoreCase(account) && matchesValue) {
+                    filtered.add(tx);
+                } else if (tx.getAccount().equalsIgnoreCase("Joint") && matchesValue) {
+                    BudgetTransaction splitTx = splitJointTransactionForAccount(tx, account);
+                    if (splitTx != null) {
+                        filtered.add(splitTx);
+                    }
+                }
+            } else {
+                if (tx.getAccount().equalsIgnoreCase(account) && matchesValue) {
+                    filtered.add(tx);
+                }
+            }
+        }
         logger.info("filterHelper: '{}'='{}', account='{}' -> {} transactions", field, value, account, filtered.size());
         String desc = (description == null ? "" : description + " ") + "(Filtered: " + field + "=" + value;
         if (account != null) desc += ", Account=" + account;
         desc += ")";
         return new BudgetTransactionList(filtered, desc.trim());
+    }
+
+    /**
+     * Splits a joint transaction for an individual account.
+     * Amount is divided by 2, account is set to the individual.
+     * @param tx The original joint transaction
+     * @param account The individual account ("Josh" or "Anna")
+     * @return The split BudgetTransaction, or null if error
+     */
+    private BudgetTransaction splitJointTransactionForAccount(BudgetTransaction tx, String account) {
+        logger.info("splitJointTransactionForAccount called for account '{}', transaction '{}'", account, tx);
+        try {
+            double originalAmount = parseAmount(tx.getAmount());
+            double splitAmount = originalAmount / 2.0;
+            String newAmount = String.format("$%.2f", splitAmount);
+            // Create a copy with adjusted fields
+            BudgetTransaction splitTx = new BudgetTransaction(
+                    tx.getName() + " [Split Joint]",
+                    newAmount,
+                    tx.getCategory(),
+                    tx.getCriticality(),
+                    tx.getTransactionDate(),
+                    account,
+                    tx.getStatus(),
+                    tx.getCreatedTime(),
+                    tx.getStatementPeriod()
+            );
+            logger.info("Joint transaction '{}' split for '{}': amount {} -> {}", tx.getName(), account, tx.getAmount(), newAmount);
+            return splitTx;
+        } catch (Exception e) {
+            logger.error("Failed to split joint transaction '{}': {}", tx, e.getMessage(), e);
+            return null;
+        }
     }
 
     // ------------------- Totals and Amounts -------------------
