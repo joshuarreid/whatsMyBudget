@@ -8,6 +8,7 @@ import util.AppLogger;
 import service.CSVStateService;
 import service.ImportService;
 import service.LocalCacheService;
+import util.BudgetRowHashUtil;
 
 import javax.swing.*;
 import java.awt.*;
@@ -173,7 +174,8 @@ public class MainWindow extends JFrame {
 
     /**
      * Handles the Import Transactions workflow.
-     * Prompts user to pick a Notion-exported CSV, delegates parsing and import to ImportService, and updates UI.
+     * Prompts user to pick a Notion-exported CSV, parses transactions, checks for duplicates,
+     * previews, allows statement period assignment, then imports new transactions and refreshes UI.
      */
     private void handleImportTransactions() {
         logger.info("Starting import transactions workflow.");
@@ -198,29 +200,91 @@ public class MainWindow extends JFrame {
             return;
         }
 
-        String workingCsvPath = csvStateService.getCurrentStatementFilePath();
-        ImportService.ImportResult importResult = importService.importTransactions(importFile, workingCsvPath);
-
-        // Updated: Use new import summary for display
-        String summary = importResult.getSummary();
-        StringBuilder msg = new StringBuilder();
-        msg.append("Import complete!\n").append(summary);
-        if (importResult.errorCount > 0 && !importResult.errorLines.isEmpty()) {
-            msg.append("\nFirst error line: \n").append(importResult.errorLines.get(0));
+        // Step 1: Parse CSV to list of BudgetTransaction (do not save yet)
+        List<BudgetTransaction> importedTxs;
+        try {
+            importedTxs = importService.parseFileToBudgetTransactions(importFile);
+            logger.info("Parsed {} transactions from file: {}",
+                    importedTxs != null ? importedTxs.size() : 0, importFile.getName());
+            if (importedTxs == null || importedTxs.isEmpty()) {
+                logger.warn("No transactions detected in the selected file: {}", importFile.getName());
+                JOptionPane.showMessageDialog(this, "No transactions detected in the selected file.", "Import Warning", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        } catch (Exception e) {
+            logger.error("Failed to parse CSV: {}", e.getMessage(), e);
+            JOptionPane.showMessageDialog(this, "Failed to parse file: " + e.getMessage(), "Import Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-        JOptionPane.showMessageDialog(this, msg.toString(), "Import Results",
-                (importResult.errorCount == 0 && importResult.duplicateCount == 0)
-                        ? JOptionPane.INFORMATION_MESSAGE
-                        : JOptionPane.WARNING_MESSAGE);
 
-        logger.info("ImportService returned: detectedCount={}, importedCount={}, duplicateCount={}, errorCount={}",
-                importResult.detectedCount, importResult.importedCount, importResult.duplicateCount, importResult.errorCount);
+        // Step 1.5: Check for duplicates against current working file
+        try {
+            List<BudgetTransaction> existingTxs = csvStateService.getCurrentTransactions();
+            Set<String> existingHashes = new HashSet<>();
+            if (existingTxs != null) {
+                for (BudgetTransaction tx : existingTxs) {
+                    String hash = BudgetRowHashUtil.computeTransactionHash(
+                            tx.getName(),
+                            tx.getAmount(),
+                            tx.getCategory(),
+                            tx.getCriticality(),
+                            tx.getTransactionDate(),
+                            tx.getAccount(),
+                            tx.getStatus(),
+                            tx.getCreatedTime(),
+                            tx.getPaymentMethod()
+                    );
+                    existingHashes.add(hash);
+                }
+            }
+            int duplicateCount = 0;
+            for (BudgetTransaction tx : importedTxs) {
+                String hash = BudgetRowHashUtil.computeTransactionHash(
+                        tx.getName(),
+                        tx.getAmount(),
+                        tx.getCategory(),
+                        tx.getCriticality(),
+                        tx.getTransactionDate(),
+                        tx.getAccount(),
+                        tx.getStatus(),
+                        tx.getCreatedTime(),
+                        tx.getPaymentMethod()
+                );
+                boolean isDuplicate = existingHashes.contains(hash);
+                // You should add a transient field to BudgetTransaction: private transient boolean duplicate;
+                // and provide setDuplicate(boolean) and isDuplicate() methods.
+                tx.setDuplicate(isDuplicate);
+                if (isDuplicate) {
+                    duplicateCount++;
+                }
+            }
+            logger.info("Duplicate detection complete: {} duplicate(s) found in CSV import.", duplicateCount);
+        } catch (Exception e) {
+            logger.error("Error during duplicate detection: {}", e.getMessage(), e);
+            JOptionPane.showMessageDialog(this, "Error during duplicate detection: " + e.getMessage(), "Import Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-        // Set flag so next reload will warn if still empty
-        showEmptyWarning = true;
-
-        // After import, reload file and refresh panels
-        reloadAndRefreshAllPanels();
+        // Step 2: Show ImportDialog for user review, period assignment, and confirmation
+        ImportDialog importDialog = new ImportDialog(this, importedTxs, (List<BudgetTransaction> confirmedTxs) -> {
+            try {
+                // Only import non-duplicate transactions
+                List<BudgetTransaction> nonDuplicateTxs = confirmedTxs.stream()
+                        .filter(tx -> !tx.isDuplicate())
+                        .toList();
+                csvStateService.saveImportedTransactions(nonDuplicateTxs);
+                logger.info("Imported {} transactions to working file (skipped duplicates)", nonDuplicateTxs.size());
+                JOptionPane.showMessageDialog(this,
+                        "Successfully imported " + nonDuplicateTxs.size() + " new transactions. Duplicates were skipped.",
+                        "Import Success", JOptionPane.INFORMATION_MESSAGE);
+                showEmptyWarning = true;
+                reloadAndRefreshAllPanels();
+            } catch (Exception ex) {
+                logger.error("Failed to import transactions: {}", ex.getMessage(), ex);
+                JOptionPane.showMessageDialog(this, "Failed to import transactions: " + ex.getMessage(), "Import Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        importDialog.setVisible(true);
     }
 
     /**

@@ -269,6 +269,41 @@ public class CSVStateService {
     }
 
     /**
+     * Saves a list of imported transactions to the current working statement file.
+     * Appends each transaction using the BudgetFileService.
+     * All file operations, errors, and transaction details are robustly logged.
+     *
+     * @param transactions List of BudgetTransaction to save
+     * @return true if all transactions were saved successfully, false otherwise
+     */
+    public boolean saveImportedTransactions(List<BudgetTransaction> transactions) {
+        logger.info("Entering saveImportedTransactions() with {} transactions.", transactions == null ? 0 : transactions.size());
+        if (transactions == null || transactions.isEmpty()) {
+            logger.warn("No transactions provided to saveImportedTransactions.");
+            return false;
+        }
+
+        String statementFile = getCurrentStatementFilePath();
+        if (statementFile == null || statementFile.isEmpty()) {
+            logger.error("No current statement file set. Cannot save imported transactions.");
+            return false;
+        }
+
+        int successCount = 0;
+        for (BudgetTransaction tx : transactions) {
+            try {
+                budgetFileService.add(tx);
+                logger.debug("Appended imported transaction: {}", tx);
+                successCount++;
+            } catch (Exception e) {
+                logger.error("Failed to save imported transaction: {}. Error: {}", tx, e.getMessage(), e);
+            }
+        }
+        logger.info("saveImportedTransactions complete: {}/{} transactions saved to '{}'.", successCount, transactions.size(), statementFile);
+        return successCount == transactions.size();
+    }
+
+    /**
      * Utility: Convert from BudgetRow to BudgetTransaction if needed.
      * Ensures full compatibility with data model for robust analysis.
      */

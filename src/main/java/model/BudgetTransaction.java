@@ -16,8 +16,9 @@ import java.util.Locale;
 public class BudgetTransaction extends BudgetRow {
     private static final Logger logger = AppLogger.getLogger(BudgetTransaction.class);
 
-    private final String statementPeriod;
+    private String statementPeriod;
     private final LocalDate parsedTransactionDate;
+    private boolean isDuplicate;
 
 
     /**
@@ -73,6 +74,15 @@ public class BudgetTransaction extends BudgetRow {
     }
 
     /**
+     * Sets the statement period for this transaction.
+     * @param statementPeriod new statement period (must not be null)
+     */
+    public void setStatementPeriod(String statementPeriod) {
+        logger.info("setStatementPeriod called, changing from '{}' to '{}'", this.statementPeriod, statementPeriod);
+        this.statementPeriod = statementPeriod;
+    }
+
+    /**
      * Returns the parsed LocalDate representation of the transaction date, or null if unparseable.
      * @return LocalDate transaction date or null
      */
@@ -106,6 +116,15 @@ public class BudgetTransaction extends BudgetRow {
             logger.error("Failed to parse amount '{}': {}", amt, e.getMessage());
             return 0.0;
         }
+    }
+
+
+    public boolean isDuplicate() {
+        return isDuplicate;
+    }
+
+    public void setDuplicate(boolean duplicate) {
+        isDuplicate = duplicate;
     }
 
     @Override

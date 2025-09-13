@@ -53,6 +53,79 @@ public class ImportService {
     }
 
     /**
+     * Parses the given CSV file into a list of BudgetTransaction, without saving to the working file.
+     * @param importFile The file to parse.
+     * @return List of BudgetTransaction objects parsed from the file.
+     * @throws Exception if parsing fails.
+     */
+    public List<BudgetTransaction> parseFileToBudgetTransactions(File importFile) throws Exception {
+        logger.info("parseFileToBudgetTransactions called for file: {}", importFile);
+        List<BudgetTransaction> transactions = new ArrayList<>();
+
+        if (importFile == null || !importFile.exists() || !importFile.isFile()) {
+            logger.error("Import file does not exist or is not a regular file: {}", importFile);
+            throw new FileNotFoundException("Import file does not exist: " + (importFile != null ? importFile.getAbsolutePath() : "null"));
+        }
+
+        try (
+                InputStreamReader reader = new InputStreamReader(new FileInputStream(importFile), StandardCharsets.UTF_8);
+                CSVReader csvReader = new CSVReader(reader)
+        ) {
+            String[] headers = csvReader.readNext();
+            if (headers == null) {
+                logger.error("Import file is empty: {}", importFile.getAbsolutePath());
+                throw new IOException("Import file is empty.");
+            }
+            // Handle UTF-8 BOM if present
+            if (headers.length > 0 && headers[0] != null && headers[0].length() > 0 && headers[0].charAt(0) == '\uFEFF') {
+                logger.info("Detected UTF-8 BOM in import file header, removing...");
+                headers[0] = headers[0].substring(1);
+            }
+            if (headers.length < 9 || !headers[0].trim().equalsIgnoreCase("Name")) {
+                logger.error("Import file header invalid or missing expected columns: {}", String.join(",", headers));
+                throw new IllegalArgumentException("Import file is missing expected columns: " + String.join(",", headers));
+            }
+
+            String[] fields;
+            int lineNum = 2; // header is line 1
+            while ((fields = csvReader.readNext()) != null) {
+                if (fields.length < 9) {
+                    logger.warn("Skipping malformed CSV line {} (wrong column count): {}", lineNum, String.join(",", fields));
+                    lineNum++;
+                    continue;
+                }
+                try {
+                    BudgetTransaction tx = new BudgetTransaction(
+                            safeTrim(fields[0]), // Name
+                            safeTrim(fields[1]), // Amount
+                            safeTrim(fields[2]), // Category
+                            safeTrim(fields[3]), // Criticality
+                            safeTrim(fields[4]), // Transaction Date
+                            safeTrim(fields[5]), // Account
+                            safeTrim(fields[6]), // Status
+                            safeTrim(fields[7]), // Created Time
+                            safeTrim(fields[8])  // Payment Method or Statement Period, as appropriate
+                    );
+                    transactions.add(tx);
+                    logger.debug("Parsed transaction at line {}: {}", lineNum, tx);
+                } catch (Exception ex) {
+                    logger.error("Failed to parse line {}: {}. Error: {}", lineNum, String.join(",", fields), ex.getMessage(), ex);
+                }
+                lineNum++;
+            }
+            logger.info("parseFileToBudgetTransactions completed: {} transactions parsed from file {}", transactions.size(), importFile.getName());
+            return transactions;
+
+        } catch (IOException | CsvValidationException ex) {
+            logger.error("Error reading/parsing import file '{}': {}", importFile.getAbsolutePath(), ex.getMessage(), ex);
+            throw ex;
+        } catch (Exception ex) {
+            logger.error("Unexpected error parsing import file '{}': {}", importFile.getAbsolutePath(), ex.getMessage(), ex);
+            throw ex;
+        }
+    }
+
+    /**
      * Imports transactions from the given CSV file and appends them to the working budget CSV.
      * Deduplication and import always ignore statementPeriod (set to blank on import).
      *
