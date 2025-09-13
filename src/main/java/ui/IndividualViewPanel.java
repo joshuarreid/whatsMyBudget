@@ -30,7 +30,7 @@ public abstract class IndividualViewPanel extends JPanel {
         logger.info("Initializing IndividualViewPanel.");
 
         this.essentialPanel = new CategorySummaryPanel(ACCOUNT,"Essential");
-        this.nonEssentialPanel = new CategorySummaryPanel(ACCOUNT,"Non-Essential");
+        this.nonEssentialPanel = new CategorySummaryPanel(ACCOUNT,"NonEssential");
 
         logger.info("Essential and Non-Essential CategorySummaryPanels created.");
     }
