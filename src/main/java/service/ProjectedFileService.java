@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 
 /**
  * Implements CSVFileService for ProjectedRow objects.
+ * Provides robust file creation and header validation.
  */
 @Service
 public class ProjectedFileService implements CSVFileService<ProjectedRow> {
@@ -26,10 +27,82 @@ public class ProjectedFileService implements CSVFileService<ProjectedRow> {
 
     public ProjectedFileService(String filePath) {
         this.filePath = filePath;
+        logger.info("ProjectedFileService initialized with filePath={}", filePath);
+    }
+
+    /**
+     * Ensures the CSV file exists and has the correct header.
+     * Creates or repairs the file as needed.
+     */
+    @Override
+    public void ensureCsvFileReady() {
+        logger.info("ensureCsvFileReady called for filePath={}", filePath);
+        File file = new File(filePath);
+        try {
+            if (!file.exists()) {
+                boolean created = file.createNewFile();
+                if (created) {
+                    logger.info("Created new projected CSV at {}", filePath);
+                    writeCsvHeader(file);
+                } else {
+                    logger.warn("Projected CSV file was not created (may already exist): {}", filePath);
+                }
+            }
+            ensureCsvHeader(file);
+        } catch (IOException e) {
+            logger.error("Failed to check or write header to Projected CSV file: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to ensure header in projected CSV", e);
+        }
+    }
+
+    /**
+     * Writes the standard CSV header row to the provided file.
+     */
+    private void writeCsvHeader(File file) throws IOException {
+        try (FileWriter writer = new FileWriter(file, false)) {
+            writer.write(String.join(",", headers));
+            writer.write(System.lineSeparator());
+            logger.info("Wrote header row to projected CSV file: {}", file.getAbsolutePath());
+        }
+    }
+
+    /**
+     * Ensures the CSV file has the correct header row as the first line.
+     * If the file is empty or header is missing/invalid, writes the correct header.
+     */
+    private void ensureCsvHeader(File file) throws IOException {
+        List<String> lines = Files.readAllLines(file.toPath());
+        if (lines.isEmpty()) {
+            logger.info("Projected CSV file {} is empty, writing header.", file.getAbsolutePath());
+            writeCsvHeader(file);
+        } else {
+            String firstLine = lines.get(0).trim();
+            String expectedHeader = String.join(",", headers);
+            if (!firstLine.equals(expectedHeader)) {
+                logger.warn("Projected CSV file {} missing or invalid header. Rewriting header.", file.getAbsolutePath());
+                try (FileWriter writer = new FileWriter(file, false)) {
+                    writer.write(expectedHeader);
+                    writer.write(System.lineSeparator());
+                    if (!firstLine.isEmpty() && !firstLine.contains(",Amount,")) {
+                        for (String line : lines) {
+                            writer.write(line);
+                            writer.write(System.lineSeparator());
+                        }
+                    } else if (lines.size() > 1) {
+                        for (int i = 1; i < lines.size(); i++) {
+                            writer.write(lines.get(i));
+                            writer.write(System.lineSeparator());
+                        }
+                    }
+                }
+                logger.info("Projected CSV file {} header corrected.", file.getAbsolutePath());
+            }
+        }
     }
 
     @Override
     public List<ProjectedRow> readAll() {
+        logger.info("readAll called for filePath={}", filePath);
         List<ProjectedRow> rows = new ArrayList<>();
         try (Reader reader = Files.newBufferedReader(Paths.get(filePath))) {
             CSVReaderHeaderAware csvReader = new CSVReaderHeaderAware(reader);
@@ -49,6 +122,7 @@ public class ProjectedFileService implements CSVFileService<ProjectedRow> {
 
     @Override
     public void add(ProjectedRow row) {
+        logger.info("add called for filePath={}, row={}", filePath, row);
         boolean fileExists = Files.exists(Paths.get(filePath));
         try (
                 Writer writer = new FileWriter(filePath, true);
@@ -74,6 +148,7 @@ public class ProjectedFileService implements CSVFileService<ProjectedRow> {
 
     @Override
     public boolean update(String key, String value, ProjectedRow updatedRow) {
+        logger.info("update called for key={}, value={}, filePath={}", key, value, filePath);
         List<ProjectedRow> all = readAll();
         boolean updated = false;
         for (int i = 0; i < all.size(); i++) {
@@ -96,6 +171,7 @@ public class ProjectedFileService implements CSVFileService<ProjectedRow> {
 
     @Override
     public boolean delete(String key, String value) {
+        logger.info("delete called for key={}, value={}, filePath={}", key, value, filePath);
         List<ProjectedRow> all = readAll();
         int originalSize = all.size();
         List<ProjectedRow> newRows = all.stream()
@@ -116,10 +192,12 @@ public class ProjectedFileService implements CSVFileService<ProjectedRow> {
 
     @Override
     public List<String> getHeaders() {
+        logger.info("getHeaders called for filePath={}", filePath);
         return new ArrayList<>(headers);
     }
 
     private void writeAll(List<ProjectedRow> rows) {
+        logger.info("writeAll called for filePath={} with {} rows", filePath, rows.size());
         try (
                 Writer writer = new FileWriter(filePath);
                 CSVWriter csvWriter = new CSVWriter(writer,
