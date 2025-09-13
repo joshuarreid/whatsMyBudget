@@ -201,16 +201,20 @@ public class MainWindow extends JFrame {
         String workingCsvPath = csvStateService.getCurrentStatementFilePath();
         ImportService.ImportResult importResult = importService.importTransactions(importFile, workingCsvPath);
 
+        // Updated: Use new import summary for display
+        String summary = importResult.getSummary();
         StringBuilder msg = new StringBuilder();
-        msg.append("Import complete!\nImported: ").append(importResult.importedCount)
-                .append("\nSkipped (errors): ").append(importResult.errorCount);
+        msg.append("Import complete!\n").append(summary);
         if (importResult.errorCount > 0 && !importResult.errorLines.isEmpty()) {
             msg.append("\nFirst error line: \n").append(importResult.errorLines.get(0));
         }
         JOptionPane.showMessageDialog(this, msg.toString(), "Import Results",
-                importResult.errorCount == 0 ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
+                (importResult.errorCount == 0 && importResult.duplicateCount == 0)
+                        ? JOptionPane.INFORMATION_MESSAGE
+                        : JOptionPane.WARNING_MESSAGE);
 
-        logger.info("ImportService returned: importedCount={}, errorCount={}", importResult.importedCount, importResult.errorCount);
+        logger.info("ImportService returned: detectedCount={}, importedCount={}, duplicateCount={}, errorCount={}",
+                importResult.detectedCount, importResult.importedCount, importResult.duplicateCount, importResult.errorCount);
 
         // Set flag so next reload will warn if still empty
         showEmptyWarning = true;
