@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * Panel that summarizes and displays weekly totals for a given category, based on statement-relative weeks.
- * Each week is 7 days, starting from statementStartDate. The last week may be shorter.
+ * Each week is 7 days, starting from the first of the month of statementStartDate. The last week may be shorter.
  */
 public class WeeklyBreakdownPanel extends JPanel {
     private final Logger logger = AppLogger.getLogger(getClass());
@@ -27,6 +27,7 @@ public class WeeklyBreakdownPanel extends JPanel {
     private final LocalDate statementStartDate;
     private final LocalDate statementEndDate;
     private Map<Integer, List<BudgetTransaction>> weekToTransactions; // For drilldown
+    private LocalDate anchorStartDate; // The first of the month for week 1
 
     /**
      * Constructs a WeeklyBreakdownPanel for the given category and transactions, using statement-relative weeks.
@@ -52,6 +53,8 @@ public class WeeklyBreakdownPanel extends JPanel {
         this.transactions = transactions;
         this.statementStartDate = statementStartDate;
         this.statementEndDate = statementEndDate;
+        // Anchor weeks to the first of the month
+        this.anchorStartDate = statementStartDate.withDayOfMonth(1);
 
         this.tableModel = new DefaultTableModel(new String[] {"Week", "Total Amount"}, 0) {
             @Override
@@ -79,9 +82,9 @@ public class WeeklyBreakdownPanel extends JPanel {
         // Map: weekIndex -> totalAmount, and weekIndex -> list of transactions
         Map<Integer, Double> weekTotals = new LinkedHashMap<>();
         weekToTransactions = new LinkedHashMap<>();
-        Map<Integer, LocalDate[]> weekRanges = getWeekRanges(statementStartDate, statementEndDate);
+        Map<Integer, LocalDate[]> weekRanges = getWeekRanges(anchorStartDate, statementEndDate);
 
-        // Assign each transaction to a week, based on days since statement start
+        // Assign each transaction to a week, based on days since anchorStartDate (first of month)
         for (BudgetTransaction tx : transactions) {
             LocalDate txDate = tx.getDate();
             if (txDate == null) {
@@ -92,7 +95,7 @@ public class WeeklyBreakdownPanel extends JPanel {
                 logger.warn("Transaction '{}' (date {}) outside statement period ({} to {}); skipping.", tx.getName(), txDate, statementStartDate, statementEndDate);
                 continue;
             }
-            int weekIndex = getStatementWeekIndex(txDate, statementStartDate);
+            int weekIndex = getStatementWeekIndex(txDate, anchorStartDate); // Always use anchorStartDate
             double amt = tx.getAmountValue();
             weekTotals.merge(weekIndex, amt, Double::sum);
             weekToTransactions.computeIfAbsent(weekIndex, k -> new ArrayList<>()).add(tx);
@@ -170,12 +173,12 @@ public class WeeklyBreakdownPanel extends JPanel {
     }
 
     /**
-     * Returns a map of weekIndex to date ranges, based on the statement period.
+     * Returns a map of weekIndex to date ranges, based on the anchor (first of month) and statement end.
      */
-    private Map<Integer, LocalDate[]> getWeekRanges(LocalDate start, LocalDate end) {
+    private Map<Integer, LocalDate[]> getWeekRanges(LocalDate anchorStart, LocalDate end) {
         Map<Integer, LocalDate[]> weekRanges = new LinkedHashMap<>();
         int week = 1;
-        LocalDate weekStart = start;
+        LocalDate weekStart = anchorStart;
         while (!weekStart.isAfter(end)) {
             LocalDate weekEnd = weekStart.plusDays(6);
             if (weekEnd.isAfter(end)) weekEnd = end;
@@ -190,11 +193,14 @@ public class WeeklyBreakdownPanel extends JPanel {
     /**
      * Returns the statement-relative week index for a given date.
      * Day 0-6: week 1, 7-13: week 2, etc.
+     * @param date The transaction date.
+     * @param anchorStart The anchor start date (first day of the statement's month).
+     * @return The week index (1-based).
      */
-    private int getStatementWeekIndex(LocalDate date, LocalDate statementStart) {
-        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(statementStart, date);
+    private int getStatementWeekIndex(LocalDate date, LocalDate anchorStart) {
+        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(anchorStart, date);
         int weekIndex = (int)(daysBetween / 7) + 1;
-        logger.debug("getStatementWeekIndex: date={}, statementStart={}, daysBetween={}, weekIndex={}", date, statementStart, daysBetween, weekIndex);
+        logger.debug("getStatementWeekIndex: date={}, anchorStart={}, daysBetween={}, weekIndex={}", date, anchorStart, daysBetween, weekIndex);
         return weekIndex;
     }
 }
