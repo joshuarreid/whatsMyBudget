@@ -2,6 +2,7 @@ package ui;
 
 import model.BudgetTransaction;
 import model.BudgetTransactionList;
+import model.ProjectedTransaction;
 import org.slf4j.Logger;
 import util.AppLogger;
 
@@ -9,6 +10,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 /**
@@ -20,6 +22,7 @@ public class JoshViewPanel extends IndividualViewPanel {
     private static final Logger logger = AppLogger.getLogger(JoshViewPanel.class);
 
     private BudgetTransactionList allTransactionList; // Now holds the canonical list for this panel
+    private List<ProjectedTransaction> projectedTransactions = Collections.emptyList();
 
     /**
      * Constructs the JoshViewPanel with category summary panels.
@@ -69,12 +72,34 @@ public class JoshViewPanel extends IndividualViewPanel {
     }
 
     /**
-     * Handles clicking on a category row in the summary table and displays the weekly breakdown dialog.
+     * Sets projected transactions for this view and updates child panels.
+     * @param projected List of ProjectedTransaction (may be null or empty)
+     */
+    public void setProjectedTransactions(List<ProjectedTransaction> projected) {
+        logger.info("setProjectedTransactions called on JoshViewPanel with {} projected(s)", projected == null ? 0 : projected.size());
+        if (projected == null) {
+            this.projectedTransactions = Collections.emptyList();
+        } else {
+            this.projectedTransactions = projected;
+        }
+        getEssentialPanel().setProjectedTransactions(projected);
+        getNonEssentialPanel().setProjectedTransactions(projected);
+    }
+
+    /**
+     * Handles clicking on a category row in the summary table and displays the weekly breakdown dialog,
+     * or the projected transactions dialog if "Projected" is selected.
      * @param category The clicked category name
      * @param isEssential True if from essentials table, false if from non-essentials
      */
     private void handleCategoryRowClick(String category, boolean isEssential) {
         logger.info("handleCategoryRowClick called for category '{}', isEssential={}", category, isEssential);
+
+        if ("Projected".equalsIgnoreCase(category)) {
+            logger.info("Projected category clicked in JoshViewPanel - dialog handled by CategorySummaryPanel.");
+            // Dialog is already handled at the panel level.
+            return;
+        }
 
         if (allTransactionList == null) {
             logger.error("No transaction list available in JoshViewPanel for breakdown.");

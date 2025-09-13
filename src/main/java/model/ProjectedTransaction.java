@@ -48,4 +48,28 @@ public class ProjectedTransaction extends BudgetTransaction {
         logger.info("isProjected called, returning true");
         return isProjected;
     }
+
+    /**
+     * Returns a BudgetTransaction copy of this ProjectedTransaction.
+     * All fields are copied. Logs method entry, field values, and result.
+     * @return BudgetTransaction with identical data
+     */
+    public BudgetTransaction asBudgetTransaction() {
+        logger.info("asBudgetTransaction called for ProjectedTransaction: name='{}', amount='{}', category='{}', criticality='{}', transactionDate='{}', account='{}', status='{}', createdTime='{}', statementPeriod='{}'",
+                getName(), getAmount(), getCategory(), getCriticality(), getTransactionDate(), getAccount(), getStatus(), getCreatedTime(), getStatementPeriod());
+        BudgetTransaction bt = new BudgetTransaction(
+                getName(),
+                getAmount(),
+                getCategory(),
+                getCriticality(),
+                getTransactionDate(),
+                getAccount(),
+                getStatus(),
+                getCreatedTime(),
+                getStatementPeriod()
+        );
+        logger.info("asBudgetTransaction returning BudgetTransaction: name='{}', amount='{}', category='{}', criticality='{}', transactionDate='{}', account='{}', status='{}', createdTime='{}', statementPeriod='{}'",
+                bt.getName(), bt.getAmount(), bt.getCategory(), bt.getCriticality(), bt.getTransactionDate(), bt.getAccount(), bt.getStatus(), bt.getCreatedTime(), bt.getStatementPeriod());
+        return bt;
+    }
 }

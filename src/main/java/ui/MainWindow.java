@@ -143,7 +143,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Creates a menu bar with File > Import Transactions, Exit.
+     * Creates a menu bar with File > Import Transactions, Manage Projected Expenses, Exit.
      */
     private JMenuBar createMenuBar() {
         logger.info("Creating menu bar.");
@@ -157,6 +157,12 @@ public class MainWindow extends JFrame {
             handleImportTransactions();
         });
 
+        JMenuItem manageProjectedItem = new JMenuItem("Manage Projected Expenses");
+        manageProjectedItem.addActionListener(e -> {
+            logger.info("User selected Manage Projected Expenses from menu.");
+            handleManageProjectedExpenses();
+        });
+
         JMenuItem exitItem = new JMenuItem("Exit");
         exitItem.addActionListener(e -> {
             logger.info("User selected Exit from menu. Exiting application.");
@@ -164,6 +170,7 @@ public class MainWindow extends JFrame {
         });
 
         fileMenu.add(importItem);
+        fileMenu.add(manageProjectedItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
         menuBar.add(fileMenu);
@@ -285,6 +292,21 @@ public class MainWindow extends JFrame {
             }
         });
         importDialog.setVisible(true);
+    }
+
+    /**
+     * Handles the Manage Projected Expenses workflow.
+     * Opens a dialog that allows the user to view and manage projected expenses by statement period.
+     */
+    private void handleManageProjectedExpenses() {
+        logger.info("Opening Manage Projected Expenses dialog.");
+        if (csvStateService == null) {
+            logger.error("csvStateService is null in handleManageProjectedExpenses.");
+            JOptionPane.showMessageDialog(this, "Application error: Service unavailable.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        ManageProjectedExpensesDialog dialog = new ManageProjectedExpensesDialog(this, csvStateService, this::reloadAndRefreshAllPanels);
+        dialog.setVisible(true);
     }
 
     /**

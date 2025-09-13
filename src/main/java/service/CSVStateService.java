@@ -32,98 +32,42 @@ public class CSVStateService {
     @Autowired
     private LocalCacheService localCacheService; // For config, statement period, last-open files
 
-    /**
-     * Loads all transactions for the current statement period.
-     * @return List of BudgetTransaction for current statement
-     */
-    public List<BudgetTransaction> getCurrentTransactions() {
-        logger.info("Entering getCurrentTransactions()");
-        String statementFile = getCurrentStatementFilePath();
-        if (statementFile == null || statementFile.isEmpty()) {
-            logger.error("No current statement file set.");
-            return Collections.emptyList();
-        }
-        List<BudgetRow> rows = budgetFileService.readAll();
-        List<BudgetTransaction> txs = rows.stream()
-                .map(row -> (row instanceof BudgetTransaction)
-                        ? (BudgetTransaction) row
-                        : convertToTransaction(row))
-                .collect(Collectors.toList());
-        logger.info("Loaded {} transactions from '{}'", txs.size(), statementFile);
-        return txs;
-    }
+    // ========================
+    // Projected Transaction API (refactored for robust delegation)
+    // ========================
 
     /**
-     * Adds a new transaction to the current statement.
-     * @param tx BudgetTransaction to add
-     * @return true if successful
-     */
-    public boolean addTransaction(BudgetTransaction tx) {
-        logger.info("Entering addTransaction(): {}", tx);
-        if (tx == null) {
-            logger.error("Cannot add null transaction.");
-            return false;
-        }
-        try {
-            budgetFileService.add(tx);
-            logger.info("Added transaction successfully.");
-            return true;
-        } catch (Exception e) {
-            logger.error("Failed to add transaction: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Updates a transaction in the current statement file by key-value lookup.
-     * @param key   field for matching (e.g., "Name")
-     * @param value value to match
-     * @param updatedTx updated transaction
-     * @return true if update succeeded
-     */
-    public boolean updateTransaction(String key, String value, BudgetTransaction updatedTx) {
-        logger.info("Entering updateTransaction(): key={}, value={}, updatedTx={}", key, value, updatedTx);
-        if (key == null || value == null || updatedTx == null) {
-            logger.error("Null argument given to updateTransaction.");
-            return false;
-        }
-        boolean updated = budgetFileService.update(key, value, updatedTx);
-        logger.info("Transaction update result: {}", updated);
-        return updated;
-    }
-
-    /**
-     * Deletes a transaction from the current statement file by key-value lookup.
-     * @param key   field for matching
-     * @param value value to match
-     * @return true if deleted
-     */
-    public boolean deleteTransaction(String key, String value) {
-        logger.info("Entering deleteTransaction(): key={}, value={}", key, value);
-        if (key == null || value == null) {
-            logger.error("Null argument to deleteTransaction.");
-            return false;
-        }
-        boolean deleted = budgetFileService.delete(key, value);
-        logger.info("Transaction delete result: {}", deleted);
-        return deleted;
-    }
-
-    /**
-     * Loads all projected/future transactions.
+     * Loads all projected/future transactions using ProjectedFileService.
      * @return list of ProjectedTransaction
      */
-    public List<ProjectedTransaction> getProjectedTransactions() {
-        logger.info("Entering getProjectedTransactions()");
+    public List<ProjectedTransaction> getAllProjectedTransactions() {
+        logger.info("Entering getAllProjectedTransactions()");
         List<BudgetRow> rows = projectedFileService.readAll();
         List<ProjectedTransaction> projections = rows.stream()
-                .map(row -> row instanceof ProjectedTransaction
-                        ? (ProjectedTransaction) row
-                        : convertToProjectedTransaction(row))
+                .map(this::convertToProjectedTransaction)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
         logger.info("Loaded {} projected transactions.", projections.size());
         return projections;
+    }
+
+    /**
+     * Loads all projected transactions for a specific statement period.
+     * @param period statement period string (must match exactly)
+     * @return list of ProjectedTransaction for the period
+     */
+    public List<ProjectedTransaction> getProjectedTransactionsForPeriod(String period) {
+        logger.info("Entering getProjectedTransactionsForPeriod('{}')", period);
+        if (period == null || period.isBlank()) {
+            logger.warn("Blank/null period provided.");
+            return Collections.emptyList();
+        }
+        List<ProjectedTransaction> all = getAllProjectedTransactions();
+        List<ProjectedTransaction> filtered = all.stream()
+                .filter(tx -> period.equals(tx.getStatementPeriod()))
+                .collect(Collectors.toList());
+        logger.info("Returning {} projected transactions for period '{}'.", filtered.size(), period);
+        return filtered;
     }
 
     /**
@@ -142,53 +86,271 @@ public class CSVStateService {
             logger.info("Added projected transaction successfully.");
             return true;
         } catch (Exception e) {
-            logger.error("Failed to add projected transaction: {}", e.getMessage());
+            logger.error("Failed to add projected transaction: {}", e.getMessage(), e);
             return false;
         }
     }
 
     /**
-     * Updates a projected transaction in the projections file by key-value lookup.
-     * @param key   field for matching (e.g., "Name")
-     * @param value value to match
-     * @param updatedTx updated projected transaction
+     * Updates a projected transaction in the projections file.
+     * Matches by all fields (robust for no unique key; if you add UUID, update this).
+     * @param original original ProjectedTransaction to match
+     * @param updated updated ProjectedTransaction to replace it
      * @return true if update succeeded
      */
-    public boolean updateProjectedTransaction(String key, String value, ProjectedTransaction updatedTx) {
-        logger.info("Entering updateProjectedTransaction(): key={}, value={}, updatedTx={}", key, value, updatedTx);
-        if (key == null || value == null || updatedTx == null) {
+    public boolean updateProjectedTransaction(ProjectedTransaction original, ProjectedTransaction updated) {
+        logger.info("Entering updateProjectedTransaction(): original={}, updated={}", original, updated);
+        if (original == null || updated == null) {
             logger.error("Null argument given to updateProjectedTransaction.");
             return false;
         }
-        boolean updated = projectedFileService.update(key, value, updatedTx);
-        logger.info("Projected transaction update result: {}", updated);
-        return updated;
+        // Find and update the first row matching all fields of 'original'
+        List<BudgetRow> all = projectedFileService.readAll();
+        Optional<BudgetRow> rowToUpdate = all.stream()
+                .filter(row -> projectedTransactionEquals(row, original))
+                .findFirst();
+        if (rowToUpdate.isEmpty()) {
+            logger.warn("Original projected transaction not found for update: {}", original);
+            return false;
+        }
+        boolean updatedFlag = projectedFileService.update("UniqueMatch", buildRowUniqueKey(rowToUpdate.get()), updated);
+        logger.info("Projected transaction update result: {}", updatedFlag);
+        return updatedFlag;
     }
 
     /**
-     * Deletes a projected transaction from the projections file by key-value lookup.
-     * @param key   field for matching
-     * @param value value to match
+     * Deletes a projected transaction from the projections file.
+     * Matches by all fields (robust for no unique key; if you add UUID, update this).
+     * @param tx ProjectedTransaction to delete
      * @return true if deleted
      */
-    public boolean deleteProjectedTransaction(String key, String value) {
-        logger.info("Entering deleteProjectedTransaction(): key={}, value={}", key, value);
-        if (key == null || value == null) {
+    public boolean deleteProjectedTransaction(ProjectedTransaction tx) {
+        logger.info("Entering deleteProjectedTransaction(): {}", tx);
+        if (tx == null) {
             logger.error("Null argument to deleteProjectedTransaction.");
             return false;
         }
-        boolean deleted = projectedFileService.delete(key, value);
+        // Find and delete the first row matching all fields of 'tx'
+        List<BudgetRow> all = projectedFileService.readAll();
+        Optional<BudgetRow> rowToDelete = all.stream()
+                .filter(row -> projectedTransactionEquals(row, tx))
+                .findFirst();
+        if (rowToDelete.isEmpty()) {
+            logger.warn("Projected transaction not found for deletion: {}", tx);
+            return false;
+        }
+        boolean deleted = projectedFileService.delete("UniqueMatch", buildRowUniqueKey(rowToDelete.get()));
         logger.info("Projected transaction delete result: {}", deleted);
         return deleted;
     }
 
+    // ========================
+    // Helpers for matching/conversion (robust, reusable)
+    // ========================
+
     /**
-     * Archives the current working statement file and clears it for the next period.
-     * The archive is named by statement period.
-     * Updates local cache and (in future) statement-period file index.
-     * @param newStatementPeriod the new/current period (e.g., "2025-09-13_to_2025-10-12")
-     * @return true if archive/rollover succeeded
+     * Converts a BudgetRow to a ProjectedTransaction.
+     * @param row BudgetRow to convert
+     * @return ProjectedTransaction or null if conversion fails
      */
+    private ProjectedTransaction convertToProjectedTransaction(BudgetRow row) {
+        logger.debug("Converting BudgetRow to ProjectedTransaction: {}", row);
+        try {
+            Map<String, String> map = new HashMap<>();
+            map.put("Name", row.getName());
+            map.put("Amount", row.getAmount());
+            map.put("Category", row.getCategory());
+            map.put("Criticality", row.getCriticality());
+            map.put("Transaction Date", row.getTransactionDate());
+            map.put("Account", row.getAccount());
+            map.put("status", row.getStatus());
+            map.put("Created time", row.getCreatedTime());
+            String statementPeriod = null;
+            if (row instanceof ProjectedTransaction) {
+                statementPeriod = ((ProjectedTransaction) row).getStatementPeriod();
+            } else if (row instanceof BudgetTransaction) {
+                statementPeriod = ((BudgetTransaction) row).getStatementPeriod();
+            } else {
+                statementPeriod = getCurrentStatementPeriod();
+            }
+            map.put("Statement Period", statementPeriod);
+            ProjectedTransaction tx = ProjectedRowConverter.mapToProjectedTransaction(map);
+            logger.debug("Converted row: {}", tx);
+            return tx;
+        } catch (Exception e) {
+            logger.error("Failed to convert BudgetRow to ProjectedTransaction: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Checks whether a BudgetRow matches all fields of a ProjectedTransaction.
+     * Used for robust matching when no UUID is available.
+     */
+    private boolean projectedTransactionEquals(BudgetRow row, ProjectedTransaction tx) {
+        if (row == null || tx == null) return false;
+        return Objects.equals(row.getName(), tx.getName())
+                && Objects.equals(row.getAmount(), tx.getAmount())
+                && Objects.equals(row.getCategory(), tx.getCategory())
+                && Objects.equals(row.getCriticality(), tx.getCriticality())
+                && Objects.equals(row.getTransactionDate(), tx.getTransactionDate())
+                && Objects.equals(row.getAccount(), tx.getAccount())
+                && Objects.equals(row.getStatus(), tx.getStatus())
+                && Objects.equals(row.getCreatedTime(), tx.getCreatedTime())
+                && Objects.equals(getStatementPeriodForRow(row), tx.getStatementPeriod());
+    }
+
+    /**
+     * Builds a unique key for a BudgetRow for robust update/delete operations.
+     * For now, uses all significant fields concatenated (should move to UUID if available).
+     */
+    private String buildRowUniqueKey(BudgetRow row) {
+        return String.join("|",
+                Objects.toString(row.getName(), ""),
+                Objects.toString(row.getAmount(), ""),
+                Objects.toString(row.getCategory(), ""),
+                Objects.toString(row.getCriticality(), ""),
+                Objects.toString(row.getTransactionDate(), ""),
+                Objects.toString(row.getAccount(), ""),
+                Objects.toString(row.getStatus(), ""),
+                Objects.toString(row.getCreatedTime(), ""),
+                Objects.toString(getStatementPeriodForRow(row), "")
+        );
+    }
+
+    /**
+     * Retrieves the statement period for a BudgetRow, falling back to current period if not present.
+     */
+    private String getStatementPeriodForRow(BudgetRow row) {
+        if (row instanceof ProjectedTransaction) {
+            return ((ProjectedTransaction) row).getStatementPeriod();
+        } else if (row instanceof BudgetTransaction) {
+            return ((BudgetTransaction) row).getStatementPeriod();
+        } else {
+            return getCurrentStatementPeriod();
+        }
+    }
+
+    // ========================
+    // Existing (working file) methods remain unchanged below...
+    // ========================
+
+    public List<BudgetTransaction> getCurrentTransactions() {
+        logger.info("Entering getCurrentTransactions()");
+        String statementFile = getCurrentStatementFilePath();
+        if (statementFile == null || statementFile.isEmpty()) {
+            logger.error("No current statement file set.");
+            return Collections.emptyList();
+        }
+        List<BudgetRow> rows = budgetFileService.readAll();
+        List<BudgetTransaction> txs = rows.stream()
+                .map(row -> (row instanceof BudgetTransaction)
+                        ? (BudgetTransaction) row
+                        : convertToTransaction(row))
+                .collect(Collectors.toList());
+        logger.info("Loaded {} transactions from '{}'", txs.size(), statementFile);
+        return txs;
+    }
+
+    public boolean addTransaction(BudgetTransaction tx) {
+        logger.info("Entering addTransaction(): {}", tx);
+        if (tx == null) {
+            logger.error("Cannot add null transaction.");
+            return false;
+        }
+        try {
+            budgetFileService.add(tx);
+            logger.info("Added transaction successfully.");
+            return true;
+        } catch (Exception e) {
+            logger.error("Failed to add transaction: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean updateTransaction(String key, String value, BudgetTransaction updatedTx) {
+        logger.info("Entering updateTransaction(): key={}, value={}, updatedTx={}", key, value, updatedTx);
+        if (key == null || value == null || updatedTx == null) {
+            logger.error("Null argument given to updateTransaction.");
+            return false;
+        }
+        boolean updated = budgetFileService.update(key, value, updatedTx);
+        logger.info("Transaction update result: {}", updated);
+        return updated;
+    }
+
+    public boolean deleteTransaction(String key, String value) {
+        logger.info("Entering deleteTransaction(): key={}, value={}", key, value);
+        if (key == null || value == null) {
+            logger.error("Null argument to deleteTransaction.");
+            return false;
+        }
+        boolean deleted = budgetFileService.delete(key, value);
+        logger.info("Transaction delete result: {}", deleted);
+        return deleted;
+    }
+
+    public boolean saveImportedTransactions(List<BudgetTransaction> transactions) {
+        logger.info("Entering saveImportedTransactions() with {} transactions.", transactions == null ? 0 : transactions.size());
+        if (transactions == null || transactions.isEmpty()) {
+            logger.warn("No transactions provided to saveImportedTransactions.");
+            return false;
+        }
+
+        String statementFile = getCurrentStatementFilePath();
+        if (statementFile == null || statementFile.isEmpty()) {
+            logger.error("No current statement file set. Cannot save imported transactions.");
+            return false;
+        }
+
+        int successCount = 0;
+        for (BudgetTransaction tx : transactions) {
+            try {
+                budgetFileService.add(tx);
+                logger.debug("Appended imported transaction: {}", tx);
+                successCount++;
+            } catch (Exception e) {
+                logger.error("Failed to save imported transaction: {}. Error: {}", tx, e.getMessage(), e);
+            }
+        }
+        logger.info("saveImportedTransactions complete: {}/{} transactions saved to '{}'.", successCount, transactions.size(), statementFile);
+        return successCount == transactions.size();
+    }
+
+    public String getCurrentStatementPeriod() {
+        logger.info("Entering getCurrentStatementPeriod()");
+        String period = localCacheService.getCurrentStatement();
+        logger.info("Current statement period: {}", period);
+        return period;
+    }
+
+    public void setCurrentStatementPeriod(String period) {
+        logger.info("Entering setCurrentStatementPeriod(): {}", period);
+        if (period == null || period.isEmpty()) {
+            logger.error("Attempted to set empty/null statement period.");
+            return;
+        }
+        localCacheService.setCurrentStatement(period);
+        logger.info("Set current statement period to '{}'", period);
+    }
+
+    public String getCurrentStatementFilePath() {
+        logger.info("Entering getCurrentStatementFilePath()");
+        String path = localCacheService.getBudgetCsvPath();
+        logger.info("Current statement file path: {}", path);
+        return path;
+    }
+
+    public void setCurrentStatementFilePath(String filePath) {
+        logger.info("Entering setCurrentStatementFilePath(): {}", filePath);
+        if (filePath == null || filePath.isEmpty()) {
+            logger.error("Attempted to set empty/null statement file path.");
+            return;
+        }
+        localCacheService.setBudgetCsvPath(filePath);
+        logger.info("Set current statement file path to '{}'", filePath);
+    }
+
     public boolean archiveAndRolloverStatement(String newStatementPeriod) {
         logger.info("Entering archiveAndRolloverStatement() with new period '{}'", newStatementPeriod);
         String currentFile = getCurrentStatementFilePath();
@@ -218,95 +380,6 @@ public class CSVStateService {
         }
     }
 
-    /**
-     * Gets the current statement period string from LocalCacheService.
-     * @return current statement period
-     */
-    public String getCurrentStatementPeriod() {
-        logger.info("Entering getCurrentStatementPeriod()");
-        String period = localCacheService.getCurrentStatement();
-        logger.info("Current statement period: {}", period);
-        return period;
-    }
-
-    /**
-     * Sets the current statement period in LocalCacheService.
-     * @param period statement period string
-     */
-    public void setCurrentStatementPeriod(String period) {
-        logger.info("Entering setCurrentStatementPeriod(): {}", period);
-        if (period == null || period.isEmpty()) {
-            logger.error("Attempted to set empty/null statement period.");
-            return;
-        }
-        localCacheService.setCurrentStatement(period);
-        logger.info("Set current statement period to '{}'", period);
-    }
-
-    /**
-     * Gets the file path of the current statement file (main budget CSV) from LocalCacheService.
-     * @return file path or null
-     */
-    public String getCurrentStatementFilePath() {
-        logger.info("Entering getCurrentStatementFilePath()");
-        String path = localCacheService.getBudgetCsvPath();
-        logger.info("Current statement file path: {}", path);
-        return path;
-    }
-
-    /**
-     * Sets the file path for the current statement file (main budget CSV) in LocalCacheService.
-     * @param filePath path to file
-     */
-    public void setCurrentStatementFilePath(String filePath) {
-        logger.info("Entering setCurrentStatementFilePath(): {}", filePath);
-        if (filePath == null || filePath.isEmpty()) {
-            logger.error("Attempted to set empty/null statement file path.");
-            return;
-        }
-        localCacheService.setBudgetCsvPath(filePath);
-        logger.info("Set current statement file path to '{}'", filePath);
-    }
-
-    /**
-     * Saves a list of imported transactions to the current working statement file.
-     * Appends each transaction using the BudgetFileService.
-     * All file operations, errors, and transaction details are robustly logged.
-     *
-     * @param transactions List of BudgetTransaction to save
-     * @return true if all transactions were saved successfully, false otherwise
-     */
-    public boolean saveImportedTransactions(List<BudgetTransaction> transactions) {
-        logger.info("Entering saveImportedTransactions() with {} transactions.", transactions == null ? 0 : transactions.size());
-        if (transactions == null || transactions.isEmpty()) {
-            logger.warn("No transactions provided to saveImportedTransactions.");
-            return false;
-        }
-
-        String statementFile = getCurrentStatementFilePath();
-        if (statementFile == null || statementFile.isEmpty()) {
-            logger.error("No current statement file set. Cannot save imported transactions.");
-            return false;
-        }
-
-        int successCount = 0;
-        for (BudgetTransaction tx : transactions) {
-            try {
-                budgetFileService.add(tx);
-                logger.debug("Appended imported transaction: {}", tx);
-                successCount++;
-            } catch (Exception e) {
-                logger.error("Failed to save imported transaction: {}. Error: {}", tx, e.getMessage(), e);
-            }
-        }
-        logger.info("saveImportedTransactions complete: {}/{} transactions saved to '{}'.", successCount, transactions.size(), statementFile);
-        return successCount == transactions.size();
-    }
-
-    /**
-     * Utility: Convert from BudgetRow to BudgetTransaction if needed.
-     * Ensures full compatibility with data model for robust analysis.
-     */
     private BudgetTransaction convertToTransaction(BudgetRow row) {
         logger.info("Converting BudgetRow to BudgetTransaction: {}", row);
         BudgetTransaction tx = new BudgetTransaction(
@@ -322,35 +395,5 @@ public class CSVStateService {
         );
         logger.info("Converted row: {}", tx);
         return tx;
-    }
-
-    /**
-     * Utility: Convert from BudgetRow to ProjectedTransaction if needed.
-     * Ensures full compatibility with data model for projections.
-     */
-    private ProjectedTransaction convertToProjectedTransaction(BudgetRow row) {
-        logger.info("Converting BudgetRow to ProjectedTransaction: {}", row);
-        try {
-            Map<String, String> map = new HashMap<>();
-            map.put("Name", row.getName());
-            map.put("Amount", row.getAmount());
-            map.put("Category", row.getCategory());
-            map.put("Criticality", row.getCriticality());
-            map.put("Transaction Date", row.getTransactionDate());
-            map.put("Account", row.getAccount());
-            map.put("status", row.getStatus());
-            map.put("Created time", row.getCreatedTime());
-            // For projections, Statement Period is required
-            String statementPeriod = row instanceof ProjectedTransaction
-                    ? ((ProjectedTransaction) row).getStatementPeriod()
-                    : getCurrentStatementPeriod();
-            map.put("Statement Period", statementPeriod);
-            ProjectedTransaction tx = ProjectedRowConverter.mapToProjectedTransaction(map);
-            logger.info("Converted row: {}", tx);
-            return tx;
-        } catch (Exception e) {
-            logger.error("Failed to convert BudgetRow to ProjectedTransaction: {}", e.getMessage(), e);
-            return null;
-        }
     }
 }
