@@ -64,7 +64,8 @@ public class CategorySummaryPanel extends JPanel {
             public void mouseClicked(MouseEvent e) {
                 logger.info("Table row clicked. e={}", e);
                 int row = table.rowAtPoint(e.getPoint());
-                if (row >= 0 && row < tableModel.getRowCount()) {
+                // Exclude the totals row from click events
+                if (row >= 0 && row < tableModel.getRowCount() - 1) {
                     Object catObj = tableModel.getValueAt(row, 0);
                     if (categoryRowClickListener != null && catObj != null) {
                         String category = catObj.toString();
@@ -73,13 +74,15 @@ public class CategorySummaryPanel extends JPanel {
                     } else {
                         logger.warn("No categoryRowClickListener set or category object was null.");
                     }
+                } else if (row == tableModel.getRowCount() - 1) {
+                    logger.info("Totals row clicked (ignored).");
                 }
             }
         });
     }
 
     /**
-     * Sets transactions to summarize and display by category.
+     * Sets transactions to summarize and display by category, including a totals row at the bottom.
      * @param transactions List of BudgetTransaction (may be null or empty)
      */
     public void setTransactions(List<BudgetTransaction> transactions) {
@@ -101,10 +104,19 @@ public class CategorySummaryPanel extends JPanel {
                         Collectors.summingDouble(BudgetTransaction::getAmountValue)
                 ));
         logger.info("Aggregated spending into {} categories.", totalsByCategory.size());
+
+        double grandTotal = 0.0;
         for (Map.Entry<String, Double> entry : totalsByCategory.entrySet()) {
             tableModel.addRow(new Object[]{entry.getKey(), String.format("$%.2f", entry.getValue())});
+            grandTotal += entry.getValue();
         }
         logger.info("Category summary table populated with {} rows.", tableModel.getRowCount());
+
+        // Add totals row if there was at least one category row
+        if (!totalsByCategory.isEmpty()) {
+            tableModel.addRow(new Object[]{"TOTAL", String.format("$%.2f", grandTotal)});
+            logger.info("Totals row added: TOTAL = ${}", String.format("%.2f", grandTotal));
+        }
     }
 
     /**
