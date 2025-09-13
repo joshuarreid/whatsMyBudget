@@ -11,22 +11,20 @@ import java.util.List;
 
 /**
  * Panel for Josh's view: shows Essential and NonEssential spending by category.
+ * Inherits standard summary panel structure from IndividualViewPanel.
  */
-public class JoshViewPanel extends JPanel {
+public class JoshViewPanel extends IndividualViewPanel {
     private static final Logger logger = AppLogger.getLogger(JoshViewPanel.class);
-    private final CategorySummaryPanel essentialPanel;
-    private final CategorySummaryPanel nonEssentialPanel;
 
     /**
      * Constructs the JoshViewPanel with category summary panels.
      */
     public JoshViewPanel() {
-        super(new GridLayout(2, 1));
+        super("Josh");
         logger.info("Initializing JoshViewPanel");
-        essentialPanel = new CategorySummaryPanel("Josh", "Essential");
-        nonEssentialPanel = new CategorySummaryPanel("Josh", "NonEssential");
-        this.add(essentialPanel);
-        this.add(nonEssentialPanel);
+        setLayout(new GridLayout(2, 1));
+        this.add(getEssentialPanel());
+        this.add(getNonEssentialPanel());
     }
 
     /**
@@ -35,8 +33,8 @@ public class JoshViewPanel extends JPanel {
      */
     public void setTransactions(List<BudgetTransaction> transactions) {
         logger.info("setTransactions(List) called on JoshViewPanel with {} transaction(s)", transactions == null ? 0 : transactions.size());
-        essentialPanel.setTransactions(transactions);
-        nonEssentialPanel.setTransactions(transactions);
+        getEssentialPanel().setTransactions(transactions);
+        getNonEssentialPanel().setTransactions(transactions);
     }
 
     /**
@@ -45,7 +43,7 @@ public class JoshViewPanel extends JPanel {
      */
     public void setTransactions(BudgetTransactionList transactionList) {
         logger.info("setTransactions(BudgetTransactionList) called on JoshViewPanel");
-        essentialPanel.setTransactions(transactionList);
-        nonEssentialPanel.setTransactions(transactionList);
+        getEssentialPanel().setTransactions(transactionList);
+        getNonEssentialPanel().setTransactions(transactionList);
     }
 }
