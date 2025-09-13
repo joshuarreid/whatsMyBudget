@@ -33,6 +33,7 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
      * Ensures the CSV file exists and has the correct header.
      * Creates or repairs the file as needed.
      */
+    @Override
     public void ensureCsvFileReady() {
         logger.info("ensureCsvFileReady called for filePath={}", filePath);
         File file = new File(filePath);
@@ -101,6 +102,7 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
     @Override
     public List<BudgetRow> readAll() {
         logger.info("readAll called for filePath={}", filePath);
+        ensureCsvFileReady();
         List<BudgetRow> rows = new ArrayList<>();
         try (Reader reader = Files.newBufferedReader(Paths.get(filePath))) {
             CSVReaderHeaderAware csvReader = new CSVReaderHeaderAware(reader);
@@ -121,6 +123,7 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
     @Override
     public void add(BudgetRow transaction) {
         logger.info("add called for filePath={}, transaction={}", filePath, transaction);
+        ensureCsvFileReady();
         boolean fileExists = Files.exists(Paths.get(filePath));
         try (
                 Writer writer = new FileWriter(filePath, true);
@@ -147,6 +150,7 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
     @Override
     public boolean update(String key, String value, BudgetRow updatedRow) {
         logger.info("update called for key={}, value={}, filePath={}", key, value, filePath);
+        ensureCsvFileReady();
         List<BudgetRow> all = readAll();
         boolean updated = false;
         for (int i = 0; i < all.size(); i++) {
@@ -170,6 +174,7 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
     @Override
     public boolean delete(String key, String value) {
         logger.info("delete called for key={}, value={}, filePath={}", key, value, filePath);
+        ensureCsvFileReady();
         List<BudgetRow> all = readAll();
         int originalSize = all.size();
         List<BudgetRow> newRows = all.stream()
@@ -191,11 +196,13 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
     @Override
     public List<String> getHeaders() {
         logger.info("getHeaders called for filePath={}", filePath);
+        ensureCsvFileReady();
         return new ArrayList<>(headers);
     }
 
     private void writeAll(List<BudgetRow> rows) {
         logger.info("writeAll called for filePath={} with {} rows", filePath, rows.size());
+        ensureCsvFileReady();
         try (
                 Writer writer = new FileWriter(filePath);
                 CSVWriter csvWriter = new CSVWriter(writer,
