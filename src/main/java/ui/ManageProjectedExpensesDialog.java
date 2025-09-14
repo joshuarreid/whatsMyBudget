@@ -121,7 +121,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
 
     /**
      * Reloads the list of available statement periods from both persisted periods and projected transactions.
-     * Populates the period combo box.
+     * Populates the period combo box. Preserves current selection if possible.
      */
     private void reloadPeriods() {
         logger.info("Reloading statement periods for projected expenses.");
@@ -141,10 +141,19 @@ public class ManageProjectedExpensesDialog extends JDialog {
             logger.info("Statement periods from projected transactions: {}", projectionPeriods);
             allPeriods.addAll(projectionPeriods);
 
+            String currentSelection = (String) periodCombo.getSelectedItem();
+
             // Populate combo box, sorted
             periodCombo.removeAllItems();
             for (String period : allPeriods.stream().sorted().collect(Collectors.toList())) {
                 periodCombo.addItem(period);
+            }
+
+            // Restore selection if possible
+            if (currentSelection != null && allPeriods.contains(currentSelection)) {
+                periodCombo.setSelectedItem(currentSelection);
+            } else if (!allPeriods.isEmpty()) {
+                periodCombo.setSelectedItem(allPeriods.stream().sorted().findFirst().orElse(null));
             }
             logger.info("Total unique statement periods loaded: {}", allPeriods.size());
         } catch (Exception ex) {
