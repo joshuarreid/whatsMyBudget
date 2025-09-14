@@ -24,9 +24,9 @@ import static ui.GenericTablePanel.formatAmount;
 
 /**
  * Panel that displays total spending by category for a given account and criticality,
- * including projected transactions for the current statement period, highlighted in blue.
+ * including projected transactions for the current statement period, highlighted in yellow.
  * Both real and projected transactions are included in the table and grand total.
- * UI inspired by modern budgeting apps: flat, blue, whitespace, clean grouping.
+ * UI inspired by modern budgeting apps: flat, whitespace, clean grouping.
  * Robust to null/empty input, includes full logging, and is ready for future drilldown.
  */
 public class CategorySummaryPanel extends JPanel {
@@ -193,7 +193,7 @@ public class CategorySummaryPanel extends JPanel {
 
     /**
      * Repopulates the table showing both real and projected category totals,
-     * with projected rows highlighted blue and included in the grand total.
+     * with projected rows highlighted yellow and included in the grand total.
      * Always displays both actual and projected rows for the same category if both exist.
      */
     private void refreshTable() {
@@ -259,10 +259,10 @@ public class CategorySummaryPanel extends JPanel {
     }
 
     /**
-     * Modern cell renderer for clean, web-like look with blue accent, bold for totals/projected.
+     * Modern cell renderer for clean, web-like look with yellow accent, bold for totals/projected.
      */
     private static class ModernCategoryCellRenderer extends DefaultTableCellRenderer {
-        private static final Color PROJECTION_BLUE = new Color(222, 236, 253);
+        private static final Color PROJECTION_YELLOW = new Color(255, 249, 196); // Faint yellow
         private static final Color TOTAL_BG = new Color(237, 242, 250);
         private static final Color HOVER_BG = new Color(244, 247, 255);
         private static final Color CATEGORY_TEXT = new Color(30, 61, 161);
@@ -288,9 +288,9 @@ public class CategorySummaryPanel extends JPanel {
             }
             // Projected row
             else if (typeObj != null && "Projected".equalsIgnoreCase(typeObj.toString())) {
-                c.setBackground(PROJECTION_BLUE);
+                c.setBackground(PROJECTION_YELLOW);
                 c.setFont(c.getFont().deriveFont(Font.BOLD, 12f));
-                c.setForeground(new Color(44, 88, 182));
+                c.setForeground(new Color(140, 110, 0));
             }
             // Hover/selected row
             else if (isSelected) {
