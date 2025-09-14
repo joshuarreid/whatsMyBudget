@@ -13,7 +13,7 @@ import java.util.*;
  *
  * Hybrid approach:
  * - Supports arbitrary key/value pairs for forward extensibility (cloud tokens, custom views, statement mapping, etc.).
- * - Explicit methods for core use cases (working budget file, last view/tab, current statement, recents).
+ * - Explicit methods for core use cases (working budget file, last view/tab, current statement, recents, statement periods).
  * - Robust logging and error handling.
  * - Ready for future expansion (cross-device sync, per-statement file index, etc.).
  */
@@ -33,7 +33,7 @@ public class LocalCacheService {
     public static final String KEY_LAST_OPEN_PROJECTED_FILE = "lastOpenProjectedFile";
     public static final String KEY_RECENT_BUDGET_FILES = "recentBudgetFiles";
     public static final String KEY_RECENT_PROJECTED_FILES = "recentProjectedFiles";
-    // For future: cloud sync tokens, statement file index, etc.
+    public static final String KEY_STATEMENT_PERIODS = "statementPeriods";
 
     /**
      * Initializes the local cache, creating config directory and loading properties.
@@ -205,6 +205,38 @@ public class LocalCacheService {
         while (recents.size() > 5) recents.remove(5);
         props.setProperty(KEY_RECENT_PROJECTED_FILES, String.join("|", recents));
         save();
+    }
+
+    // --- Statement period persistence API ---
+
+    /**
+     * Gets all known statement periods, as stored in local config.
+     * @return List of statement period strings.
+     */
+    public List<String> getAllStatementPeriods() {
+        String val = props.getProperty(KEY_STATEMENT_PERIODS, "");
+        logger.info("getAllStatementPeriods -> '{}'", val);
+        if (val.isEmpty()) return new ArrayList<>();
+        return new ArrayList<>(Arrays.asList(val.split("\\|")));
+    }
+
+    /**
+     * Add a statement period to persistent config.
+     * Duplicates are not added.
+     * @param period Statement period to persist.
+     */
+    public void addStatementPeriod(String period) {
+        logger.info("addStatementPeriod('{}')", period);
+        if (period == null || period.isEmpty()) return;
+        List<String> periods = getAllStatementPeriods();
+        if (!periods.contains(period)) {
+            periods.add(period);
+            props.setProperty(KEY_STATEMENT_PERIODS, String.join("|", periods));
+            save();
+            logger.info("Statement period '{}' added to persistent config.", period);
+        } else {
+            logger.info("Statement period '{}' already present in config.", period);
+        }
     }
 
     /**

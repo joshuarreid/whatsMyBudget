@@ -91,36 +91,43 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
 
     /**
      * Ensures the CSV file has the correct header row as the first line.
-     * If the file is empty or header is missing/invalid, writes the correct header.
+     * If the file is empty or header is missing/invalid, writes the correct header and preserves data rows.
+     * Will not rewrite header if already present and correct.
      */
     private void ensureCsvHeader(File file) throws IOException {
         List<String> lines = Files.readAllLines(file.toPath());
+        String expectedHeader = String.join(",", headers);
+
         if (lines.isEmpty()) {
             logger.info("Projections CSV file {} is empty, writing header.", file.getAbsolutePath());
             writeCsvHeader(file);
-        } else {
-            String firstLine = lines.get(0).trim();
-            String expectedHeader = String.join(",", headers);
-            if (!firstLine.equals(expectedHeader)) {
-                logger.warn("Projections CSV file {} missing or invalid header. Rewriting header.", file.getAbsolutePath());
-                try (FileWriter writer = new FileWriter(file, false)) {
-                    writer.write(expectedHeader);
-                    writer.write(System.lineSeparator());
-                    if (!firstLine.isEmpty() && !firstLine.contains(",Amount,")) {
-                        for (String line : lines) {
-                            writer.write(line);
-                            writer.write(System.lineSeparator());
-                        }
-                    } else if (lines.size() > 1) {
-                        for (int i = 1; i < lines.size(); i++) {
-                            writer.write(lines.get(i));
-                            writer.write(System.lineSeparator());
-                        }
-                    }
-                }
-                logger.info("Projections CSV file {} header corrected.", file.getAbsolutePath());
+            return;
+        }
+
+        String firstLine = lines.get(0).trim();
+        logger.info("Checking first line of projections CSV: '{}'", firstLine);
+
+        if (firstLine.equals(expectedHeader)) {
+            logger.info("Header is already correct in projections CSV file: {}", file.getAbsolutePath());
+            return; // Header is correct, nothing to do.
+        }
+
+        logger.warn("Projections CSV file {} missing or invalid header. Expected: '{}', Found: '{}'. Rewriting header.", file.getAbsolutePath(), expectedHeader, firstLine);
+
+        // Only keep lines after the first if the first was a header, otherwise keep all lines
+        List<String> dataLines = lines;
+        if (firstLine.contains("Name") && firstLine.contains("Amount")) {
+            dataLines = lines.subList(1, lines.size());
+        }
+        try (FileWriter writer = new FileWriter(file, false)) {
+            writer.write(expectedHeader);
+            writer.write(System.lineSeparator());
+            for (String line : dataLines) {
+                writer.write(line);
+                writer.write(System.lineSeparator());
             }
         }
+        logger.info("Projections CSV file {} header corrected.", file.getAbsolutePath());
     }
 
     @Override

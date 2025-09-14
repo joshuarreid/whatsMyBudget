@@ -8,6 +8,7 @@ import service.LocalCacheService;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.*;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -119,22 +120,33 @@ public class ManageProjectedExpensesDialog extends JDialog {
     }
 
     /**
-     * Reloads the list of available statement periods from all projected transactions.
+     * Reloads the list of available statement periods from both persisted periods and projected transactions.
      * Populates the period combo box.
      */
     private void reloadPeriods() {
         logger.info("Reloading statement periods for projected expenses.");
         try {
+            // Get all periods from config
+            Set<String> allPeriods = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+            List<String> persistedPeriods = localCacheService.getAllStatementPeriods();
+            logger.info("Persisted statement periods: {}", persistedPeriods);
+            allPeriods.addAll(persistedPeriods);
+
+            // Get all periods from projected transactions
             List<ProjectedTransaction> all = csvStateService.getAllProjectedTransactions();
-            Set<String> periods = new TreeSet<>(all.stream()
+            Set<String> projectionPeriods = all.stream()
                     .map(ProjectedTransaction::getStatementPeriod)
                     .filter(p -> p != null && !p.isBlank())
-                    .collect(Collectors.toSet()));
+                    .collect(Collectors.toSet());
+            logger.info("Statement periods from projected transactions: {}", projectionPeriods);
+            allPeriods.addAll(projectionPeriods);
+
+            // Populate combo box, sorted
             periodCombo.removeAllItems();
-            for (String period : periods) {
+            for (String period : allPeriods.stream().sorted().collect(Collectors.toList())) {
                 periodCombo.addItem(period);
             }
-            logger.info("Found {} statement periods with projected expenses.", periods.size());
+            logger.info("Total unique statement periods loaded: {}", allPeriods.size());
         } catch (Exception ex) {
             logger.error("Failed to reload periods: {}", ex.getMessage(), ex);
             JOptionPane.showMessageDialog(this, "Failed to load statement periods: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -169,6 +181,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
 
     /**
      * Allows user to add a new statement period (e.g. "SEPTEMBER2025").
+     * Persists new period in LocalCacheService.
      */
     private void addPeriod() {
         logger.info("User requested to add a new statement period.");
@@ -187,9 +200,11 @@ public class ManageProjectedExpensesDialog extends JDialog {
             String year = yearField.getText().trim();
             if (month != null && !year.isEmpty() && year.matches("\\d{4}")) {
                 String period = formatStatementPeriod(month, year);
-                periodCombo.addItem(period);
+                logger.info("Formatted new statement period '{}'", period);
+                localCacheService.addStatementPeriod(period); // Persist the period
+                reloadPeriods(); // Re-populate periodCombo with all periods
                 periodCombo.setSelectedItem(period);
-                logger.info("Added new statement period '{}'.", period);
+                logger.info("Added and selected new statement period '{}'.", period);
                 localCacheService.setCurrentStatementPeriod(period);
             } else {
                 logger.warn("Invalid statement period input. Month: '{}', Year: '{}'", month, year);
