@@ -13,10 +13,12 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Panel that summarizes and displays weekly totals for a given category, based on statement-relative weeks.
  * Each week is 7 days, starting from the first of the month of statementStartDate. The last week may be shorter.
+ * For individual views, ensures that split [Split Joint] entries replace the original Joint entry.
  */
 public class WeeklyBreakdownPanel extends JPanel {
     private final Logger logger = AppLogger.getLogger(getClass());
@@ -53,7 +55,6 @@ public class WeeklyBreakdownPanel extends JPanel {
         this.transactions = transactions;
         this.statementStartDate = statementStartDate;
         this.statementEndDate = statementEndDate;
-        // Anchor weeks to the first of the month
         this.anchorStartDate = statementStartDate.withDayOfMonth(1);
 
         this.tableModel = new DefaultTableModel(new String[] {"Week", "Total Amount"}, 0) {
@@ -70,6 +71,8 @@ public class WeeklyBreakdownPanel extends JPanel {
     /**
      * Recomputes and displays the weekly breakdown table, using statement-relative weeks.
      * Also builds a map of week index to transactions for drilldown.
+     * Filters out original Joint transactions if a split (personalized) version for Josh/Anna exists,
+     * so totals match the rows shown in the drilldown modal.
      */
     private void updateTable() {
         logger.info("updateTable called for category='{}' with {} transaction(s)", categoryName, transactions.size());
@@ -79,13 +82,16 @@ public class WeeklyBreakdownPanel extends JPanel {
             return;
         }
 
+        // --- Fix: filter out duplicate Joint+Split-Joint for individual views at the start ---
+        List<BudgetTransaction> filteredTransactions = filterPersonalizedNoJointDuplicatesForWeek(transactions);
+
         // Map: weekIndex -> totalAmount, and weekIndex -> list of transactions
         Map<Integer, Double> weekTotals = new LinkedHashMap<>();
         weekToTransactions = new LinkedHashMap<>();
         Map<Integer, LocalDate[]> weekRanges = getWeekRanges(anchorStartDate, statementEndDate);
 
         // Assign each transaction to a week, based on days since anchorStartDate (first of month)
-        for (BudgetTransaction tx : transactions) {
+        for (BudgetTransaction tx : filteredTransactions) {
             LocalDate txDate = tx.getDate();
             if (txDate == null) {
                 logger.warn("Transaction '{}' has null parsed date; skipping.", tx.getName());
@@ -133,6 +139,8 @@ public class WeeklyBreakdownPanel extends JPanel {
 
     /**
      * Handles clicking on a week row and shows the transactions for that week.
+     * For individual views, ensures that only the personalized split is shown when both the split and the
+     * original joint transaction are present for the same underlying transaction.
      * @param row The row index clicked.
      */
     private void handleWeekRowClick(int row) {
@@ -142,7 +150,10 @@ public class WeeklyBreakdownPanel extends JPanel {
         List<BudgetTransaction> txForWeek = weekToTransactions != null ? weekToTransactions.getOrDefault(weekIndex, List.of()) : List.of();
         logger.info("Transactions found for week {}: count={}", weekIndex, txForWeek.size());
 
-        if (txForWeek.isEmpty()) {
+        // No need to filter again since updateTable already filtered, but keep for robustness if table logic changes
+        List<BudgetTransaction> filteredTxForWeek = filterPersonalizedNoJointDuplicatesForWeek(txForWeek);
+
+        if (filteredTxForWeek.isEmpty()) {
             JOptionPane.showMessageDialog(this, "No transactions for this week.", "No Data", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
@@ -160,7 +171,7 @@ public class WeeklyBreakdownPanel extends JPanel {
                         tx.getAccount()
                 });
 
-        txPanel.setTransactions(txForWeek);
+        txPanel.setTransactions(filteredTxForWeek);
 
         JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Transactions for " + tableModel.getValueAt(row, 0), Dialog.ModalityType.APPLICATION_MODAL);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -170,6 +181,91 @@ public class WeeklyBreakdownPanel extends JPanel {
         dialog.setVisible(true);
 
         logger.info("Displayed transaction table for week {}", weekIndex);
+    }
+
+    /**
+     * Filters out original Joint transactions if a split (personalized) version for Josh/Anna exists.
+     * For Joint views, leaves only Joint transactions.
+     * Assumes all [Split Joint] txs have names ending with "[Split Joint]" and account of Josh/Anna.
+     */
+    private List<BudgetTransaction> filterPersonalizedNoJointDuplicatesForWeek(List<BudgetTransaction> txs) {
+        logger.info("filterPersonalizedNoJointDuplicatesForWeek called on {} txs", txs == null ? 0 : txs.size());
+        if (txs == null || txs.isEmpty()) return txs;
+
+        // If the only accounts are Joint, do nothing.
+        boolean onlyJoint = txs.stream().allMatch(tx -> "Joint".equalsIgnoreCase(tx.getAccount()));
+        if (onlyJoint) {
+            logger.info("All transactions are Joint; no filtering needed.");
+            return txs;
+        }
+
+        // For individual views: remove original Joint tx if a split for the same name/date/category exists
+        Set<TxKey> personalizedKeys = txs.stream()
+                .filter(tx -> (tx.getAccount().equalsIgnoreCase("Josh") || tx.getAccount().equalsIgnoreCase("Anna"))
+                        && tx.getName().endsWith("[Split Joint]"))
+                .map(tx -> new TxKey(tx))
+                .collect(Collectors.toSet());
+
+        logger.info("Found {} personalized split joint tx keys.", personalizedKeys.size());
+
+        // Remove original joint if there's a split version for same (date, name w/o [Split Joint], category)
+        List<BudgetTransaction> result = txs.stream()
+                .filter(tx -> {
+                    if ("Joint".equalsIgnoreCase(tx.getAccount())) {
+                        TxKey key = new TxKey(tx, true); // base key, no split
+                        if (personalizedKeys.contains(key)) {
+                            logger.info("Filtering out original Joint tx '{}' as split exists.", tx.getName());
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
+
+        logger.info("filterPersonalizedNoJointDuplicatesForWeek returning {} txs after filtering.", result.size());
+        return result;
+    }
+
+    /**
+     * Helper class for identifying duplicate split vs. joint transactions.
+     */
+    private static class TxKey {
+        private final String date;
+        private final String nameBase;
+        private final String category;
+
+        TxKey(BudgetTransaction tx) {
+            this(tx, false);
+        }
+
+        TxKey(BudgetTransaction tx, boolean removeSplitSuffix) {
+            this.date = tx.getTransactionDate();
+            String name = tx.getName();
+            if (removeSplitSuffix && name != null && name.endsWith("[Split Joint]")) {
+                name = name.substring(0, name.length() - "[Split Joint]".length()).trim();
+            }
+            // If not removing, and name ends with [Split Joint], remove for matching with Joint
+            if (!removeSplitSuffix && name != null && name.endsWith("[Split Joint]")) {
+                name = name.substring(0, name.length() - "[Split Joint]".length()).trim();
+            }
+            this.nameBase = name == null ? "" : name;
+            this.category = tx.getCategory() == null ? "" : tx.getCategory();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof TxKey)) return false;
+            TxKey txKey = (TxKey) o;
+            return Objects.equals(date, txKey.date)
+                    && Objects.equals(nameBase, txKey.nameBase)
+                    && Objects.equals(category, txKey.category);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(date, nameBase, category);
+        }
     }
 
     /**
