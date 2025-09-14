@@ -4,6 +4,7 @@ import com.opencsv.exceptions.CsvValidationException;
 import model.BudgetRow;
 import org.springframework.stereotype.Service;
 import util.BudgetRowConverter;
+import util.ProjectedRowConverter;
 import util.AppLogger;
 import org.slf4j.Logger;
 import com.opencsv.*;
@@ -23,7 +24,8 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
     private static final Logger logger = AppLogger.getLogger(ProjectedFileService.class);
 
     private final String projectedFilePath;
-    private final List<String> headers = BudgetRowConverter.headers();
+    // Use projection-specific headers
+    private final List<String> headers = ProjectedRowConverter.headers();
 
     /**
      * Constructs the ProjectedFileService using the directory of the provided budget CSV file.
@@ -130,7 +132,8 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
             CSVReaderHeaderAware csvReader = new CSVReaderHeaderAware(reader);
             Map<String, String> map;
             while ((map = csvReader.readMap()) != null) {
-                BudgetRow projectedRow = BudgetRowConverter.mapToBudgetRow(map);
+                // Use ProjectedRowConverter to map
+                BudgetRow projectedRow = ProjectedRowConverter.mapToBudgetRow(map);
                 rows.add(projectedRow);
             }
             logger.info("Read {} rows from projections CSV file '{}'", rows.size(), projectedFilePath);
@@ -158,7 +161,7 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
             if (!fileExists) {
                 csvWriter.writeNext(headers.toArray(new String[0]));
             }
-            Map<String, String> map = BudgetRowConverter.budgetRowToMap(projectedRow);
+            Map<String, String> map = ProjectedRowConverter.budgetRowToMap(projectedRow);
             String[] values = headers.stream()
                     .map(h -> map.getOrDefault(h, ""))
                     .toArray(String[]::new);
@@ -177,7 +180,7 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
         boolean updated = false;
         for (int i = 0; i < all.size(); i++) {
             BudgetRow row = all.get(i);
-            Map<String, String> rowMap = BudgetRowConverter.budgetRowToMap(row);
+            Map<String, String> rowMap = ProjectedRowConverter.budgetRowToMap(row);
             if (rowMap.getOrDefault(key, "").equals(value)) {
                 all.set(i, updatedRow);
                 updated = true;
@@ -201,7 +204,7 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
         int originalSize = all.size();
         List<BudgetRow> newRows = all.stream()
                 .filter(row -> {
-                    Map<String, String> rowMap = BudgetRowConverter.budgetRowToMap(row);
+                    Map<String, String> rowMap = ProjectedRowConverter.budgetRowToMap(row);
                     return !rowMap.getOrDefault(key, "").equals(value);
                 })
                 .collect(Collectors.toList());
@@ -235,7 +238,7 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
         ) {
             csvWriter.writeNext(headers.toArray(new String[0]));
             for (BudgetRow row : rows) {
-                Map<String, String> map = BudgetRowConverter.budgetRowToMap(row);
+                Map<String, String> map = ProjectedRowConverter.budgetRowToMap(row);
                 String[] values = headers.stream()
                         .map(h -> map.getOrDefault(h, ""))
                         .toArray(String[]::new);

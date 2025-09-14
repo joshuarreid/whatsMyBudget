@@ -1,5 +1,6 @@
 package util;
 
+import model.BudgetRow;
 import model.ProjectedTransaction;
 import org.slf4j.Logger;
 import util.AppLogger;
@@ -81,5 +82,36 @@ public class ProjectedRowConverter implements RowConverter<ProjectedTransaction>
 
     public static Map<String, String> projectedRowToMap(ProjectedTransaction tx) {
         return new ProjectedRowConverter().rowToMap(tx);
+    }
+
+    /**
+     * Converts a CSV map to a BudgetRow (specifically a ProjectedTransaction).
+     * @param map CSV field map
+     * @return BudgetRow object (ProjectedTransaction)
+     */
+    public static BudgetRow mapToBudgetRow(Map<String, String> map) {
+        logger.info("mapToBudgetRow called with map: {}", map);
+        try {
+            ProjectedTransaction tx = mapToProjectedTransaction(map);
+            logger.info("Successfully mapped to BudgetRow (ProjectedTransaction): {}", tx);
+            return tx;
+        } catch (Exception e) {
+            logger.error("Failed to map mapToBudgetRow in ProjectedRowConverter: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Converts a BudgetRow (specifically a ProjectedTransaction) to a CSV map.
+     * @param row BudgetRow object
+     * @return Map of CSV fields
+     */
+    public static Map<String, String> budgetRowToMap(BudgetRow row) {
+        logger.info("budgetRowToMap called for BudgetRow: {}", row);
+        if (!(row instanceof ProjectedTransaction)) {
+            logger.error("budgetRowToMap called with non-ProjectedTransaction BudgetRow: {}", row);
+            return Collections.emptyMap();
+        }
+        return projectedRowToMap((ProjectedTransaction) row);
     }
 }
