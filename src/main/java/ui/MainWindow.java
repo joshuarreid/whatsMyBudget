@@ -182,7 +182,7 @@ public class MainWindow extends JFrame {
     /**
      * Handles the Import Transactions workflow.
      * Prompts user to pick a Notion-exported CSV, parses transactions, checks for duplicates,
-     * previews, allows statement period assignment, then imports new transactions and refreshes UI.
+     * previews, and imports new transactions and refreshes UI.
      */
     private void handleImportTransactions() {
         logger.info("Starting import transactions workflow.");
@@ -258,8 +258,6 @@ public class MainWindow extends JFrame {
                         tx.getPaymentMethod()
                 );
                 boolean isDuplicate = existingHashes.contains(hash);
-                // You should add a transient field to BudgetTransaction: private transient boolean duplicate;
-                // and provide setDuplicate(boolean) and isDuplicate() methods.
                 tx.setDuplicate(isDuplicate);
                 if (isDuplicate) {
                     duplicateCount++;
@@ -272,7 +270,7 @@ public class MainWindow extends JFrame {
             return;
         }
 
-        // Step 2: Show ImportDialog for user review, period assignment, and confirmation
+        // Step 2: Show ImportDialog for user review and confirmation (no statement period dialog)
         ImportDialog importDialog = new ImportDialog(this, importedTxs, (List<BudgetTransaction> confirmedTxs) -> {
             try {
                 // Only import non-duplicate transactions

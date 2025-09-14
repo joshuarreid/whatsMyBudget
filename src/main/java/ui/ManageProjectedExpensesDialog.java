@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import java.util.Locale;
 
 /**
  * Dialog for managing projected expenses by statement period.
@@ -25,6 +26,12 @@ public class ManageProjectedExpensesDialog extends JDialog {
     private JComboBox<String> periodCombo;
     private GenericTablePanel tablePanel;
     private List<ProjectedTransaction> currentTransactions;
+
+    // Month constants for statement period selection
+    private static final String[] MONTHS = {
+            "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+            "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
+    };
 
     /**
      * Constructs the dialog for managing projected expenses.
@@ -140,14 +147,40 @@ public class ManageProjectedExpensesDialog extends JDialog {
 
     private void addPeriod() {
         logger.info("User requested to add a new statement period.");
-        String period = JOptionPane.showInputDialog(this, "Enter new statement period (e.g., 2025-10-13_to_2025-11-12):", "Add Statement Period", JOptionPane.PLAIN_MESSAGE);
-        if (period != null && !period.isBlank()) {
-            periodCombo.addItem(period);
-            periodCombo.setSelectedItem(period);
-            logger.info("Added new statement period '{}'.", period);
+        JPanel panel = new JPanel(new GridLayout(2, 2, 6, 6));
+        JComboBox<String> monthBox = new JComboBox<>(MONTHS);
+        JTextField yearField = new JTextField();
+
+        panel.add(new JLabel("Month:"));
+        panel.add(monthBox);
+        panel.add(new JLabel("Year:"));
+        panel.add(yearField);
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "Add Statement Period", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            String month = (String) monthBox.getSelectedItem();
+            String year = yearField.getText().trim();
+            if (month != null && !year.isEmpty() && year.matches("\\d{4}")) {
+                String period = formatStatementPeriod(month, year);
+                periodCombo.addItem(period);
+                periodCombo.setSelectedItem(period);
+                logger.info("Added new statement period '{}'.", period);
+            } else {
+                logger.warn("Invalid statement period input. Month: '{}', Year: '{}'", month, year);
+                JOptionPane.showMessageDialog(this, "Please enter a valid year (e.g., 2025).", "Invalid Input", JOptionPane.WARNING_MESSAGE);
+            }
         } else {
-            logger.info("Add period canceled or blank.");
+            logger.info("Add period canceled or dialog closed.");
         }
+    }
+
+    private static String formatStatementPeriod(String month, String year) {
+        String formatted = month == null ? "" : month.trim().toUpperCase(Locale.ENGLISH);
+        // Remove spaces and any non-alpha characters
+        formatted = formatted.replaceAll("[^A-Z]", "");
+        String period = formatted + year;
+        logger.info("Formatted statement period: '{}'", period);
+        return period;
     }
 
     private void addProjected() {
