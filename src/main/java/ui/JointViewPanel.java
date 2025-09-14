@@ -111,6 +111,7 @@ public class JointViewPanel extends JPanel {
 
     /**
      * Sets projected transactions for this view and updates child panels.
+     * Passes only Essential projections to the Essential panel, and only NonEssential to the NonEssential panel.
      * @param projected List of ProjectedTransaction (may be null or empty)
      */
     public void setProjectedTransactions(List<ProjectedTransaction> projected) {
@@ -120,8 +121,19 @@ public class JointViewPanel extends JPanel {
         } else {
             this.projectedTransactions = projected;
         }
-        essentialPanel.setProjectedTransactions(projected);
-        nonEssentialPanel.setProjectedTransactions(projected);
+        // Filter projections by criticality for each panel
+        List<ProjectedTransaction> essentialProjections = this.projectedTransactions.stream()
+                .filter(pt -> "Essential".equalsIgnoreCase(pt.getCriticality()))
+                .collect(Collectors.toList());
+        List<ProjectedTransaction> nonEssentialProjections = this.projectedTransactions.stream()
+                .filter(pt -> "NonEssential".equalsIgnoreCase(pt.getCriticality()))
+                .collect(Collectors.toList());
+
+        logger.info("Passing {} essential and {} nonessential projections to child panels.",
+                essentialProjections.size(), nonEssentialProjections.size());
+
+        essentialPanel.setProjectedTransactions(essentialProjections);
+        nonEssentialPanel.setProjectedTransactions(nonEssentialProjections);
     }
 
     /**

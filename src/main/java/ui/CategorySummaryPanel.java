@@ -117,6 +117,7 @@ public class CategorySummaryPanel extends JPanel {
     /**
      * Repopulates the table showing both real and projected category totals,
      * with projected rows highlighted blue and included in the grand total.
+     * Always displays both actual and projected rows for the same category if both exist.
      */
     private void refreshTable() {
         logger.info("refreshTable called for account '{}', criticality '{}'", account, criticality);
@@ -155,20 +156,23 @@ public class CategorySummaryPanel extends JPanel {
             boolean hasReal = realTotals.containsKey(category);
             boolean hasProj = projectedTotals.containsKey(category);
 
+            // Always add both rows if both exist for a category
             if (hasReal) {
                 double val = realTotals.get(category);
                 tableModel.addRow(new Object[]{category, String.format("$%.2f", val), "Actual"});
+                logger.debug("Added Actual row: Category='{}', Amount={}", category, val);
                 grandTotal += val;
             }
             if (hasProj) {
                 double val = projectedTotals.get(category);
                 tableModel.addRow(new Object[]{category, String.format("$%.2f", val), "Projected"});
+                logger.debug("Added Projected row: Category='{}', Amount={}", category, val);
                 grandTotal += val;
             }
         }
 
-        logger.info("Aggregated {} real categories, {} projected categories.", realTotals.size(), projectedTotals.size());
-        logger.info("Category summary table populated with {} rows.", tableModel.getRowCount());
+        logger.info("Category summary table populated with {} rows ({} real, {} projected, {} unique categories).",
+                tableModel.getRowCount(), realTotals.size(), projectedTotals.size(), allCategories.size());
 
         // Add totals row if there was at least one category row
         if (!allCategories.isEmpty()) {

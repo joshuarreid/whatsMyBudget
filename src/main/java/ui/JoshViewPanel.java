@@ -59,11 +59,11 @@ public class JoshViewPanel extends IndividualViewPanel {
 
         List<BudgetTransaction> allTransactions = stateService.getCurrentTransactions();
         logger.info("Retrieved {} current transactions from state service.", allTransactions.size());
-        // Filter for Josh's account
+        // Filter for Josh's and Joint accounts
         List<BudgetTransaction> filteredTransactions = allTransactions.stream()
-                .filter(tx -> "Josh".equalsIgnoreCase(tx.getAccount()))
+                .filter(tx -> "Josh".equalsIgnoreCase(tx.getAccount()) || "Joint".equalsIgnoreCase(tx.getAccount()))
                 .collect(Collectors.toList());
-        logger.info("Filtered to {} transactions for account='Josh'.", filteredTransactions.size());
+        logger.info("Filtered to {} transactions for account='Josh' and 'Joint'.", filteredTransactions.size());
         setTransactions(filteredTransactions);
 
         // Get all projections for this period
@@ -89,8 +89,10 @@ public class JoshViewPanel extends IndividualViewPanel {
         } else {
             this.allTransactionList = new BudgetTransactionList(null, "JoshViewPanel Transactions");
         }
-        getEssentialPanel().setTransactions(this.allTransactionList);
-        getNonEssentialPanel().setTransactions(this.allTransactionList);
+        // Show both Josh and Joint transactions for each panel/criticality
+        List<String> accounts = List.of("Josh", "Joint");
+        getEssentialPanel().setTransactions(this.allTransactionList.getByAccountsAndCriticality(accounts, "Essential"));
+        getNonEssentialPanel().setTransactions(this.allTransactionList.getByAccountsAndCriticality(accounts, "NonEssential"));
     }
 
     /**
@@ -105,13 +107,15 @@ public class JoshViewPanel extends IndividualViewPanel {
             getNonEssentialPanel().setTransactions((List<BudgetTransaction>) null);
         } else {
             this.allTransactionList = transactionList;
-            getEssentialPanel().setTransactions(transactionList);
-            getNonEssentialPanel().setTransactions(transactionList);
+            List<String> accounts = List.of("Josh", "Joint");
+            getEssentialPanel().setTransactions(transactionList.getByAccountsAndCriticality(accounts, "Essential"));
+            getNonEssentialPanel().setTransactions(transactionList.getByAccountsAndCriticality(accounts, "NonEssential"));
         }
     }
 
     /**
      * Sets projected transactions for this view and updates child panels.
+     * Passes only Essential projections to the Essential panel, and only NonEssential to the NonEssential panel.
      * @param projected List of ProjectedTransaction (may be null or empty)
      */
     public void setProjectedTransactions(List<ProjectedTransaction> projected) {
@@ -121,8 +125,19 @@ public class JoshViewPanel extends IndividualViewPanel {
         } else {
             this.projectedTransactions = projected;
         }
-        getEssentialPanel().setProjectedTransactions(projected);
-        getNonEssentialPanel().setProjectedTransactions(projected);
+        // Filter projections by criticality for each panel
+        List<ProjectedTransaction> essentialProjections = this.projectedTransactions.stream()
+                .filter(pt -> "Essential".equalsIgnoreCase(pt.getCriticality()))
+                .collect(Collectors.toList());
+        List<ProjectedTransaction> nonEssentialProjections = this.projectedTransactions.stream()
+                .filter(pt -> "NonEssential".equalsIgnoreCase(pt.getCriticality()))
+                .collect(Collectors.toList());
+
+        logger.info("Passing {} essential and {} nonessential projections to child panels.",
+                essentialProjections.size(), nonEssentialProjections.size());
+
+        getEssentialPanel().setProjectedTransactions(essentialProjections);
+        getNonEssentialPanel().setProjectedTransactions(nonEssentialProjections);
     }
 
     /**
@@ -147,8 +162,9 @@ public class JoshViewPanel extends IndividualViewPanel {
         }
 
         String criticality = isEssential ? "Essential" : "NonEssential";
-        List<BudgetTransaction> personalized = allTransactionList.getPersonalizedTransactions("Josh", criticality);
-        logger.info("Personalized transaction list for Josh with criticality '{}': {} transactions", criticality, personalized.size());
+        // Show both Josh and Joint transactions for breakdown
+        List<BudgetTransaction> personalized = allTransactionList.getByAccountsAndCriticality(List.of("Josh", "Joint"), criticality);
+        logger.info("Personalized transaction list for Josh+Joint with criticality '{}': {} transactions", criticality, personalized.size());
 
         // Filter for the selected category
         List<BudgetTransaction> filtered = personalized.stream()

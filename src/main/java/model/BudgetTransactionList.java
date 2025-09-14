@@ -339,6 +339,74 @@ public class BudgetTransactionList implements Serializable {
         return personalized;
     }
 
+    /**
+     * Returns all transactions for the given list of accounts and criticality.
+     * Splits "Joint" transactions for Josh/Anna as needed.
+     * @param accounts List of accounts (e.g., ["Anna", "Joint"] or ["Josh", "Joint"])
+     * @param criticality Criticality filter ("Essential", "NonEssential", or null)
+     * @return List of BudgetTransaction
+     */
+    public List<BudgetTransaction> getByAccountsAndCriticality(List<String> accounts, String criticality) {
+        logger.info("getByAccountsAndCriticality called with accounts='{}', criticality='{}'", accounts, criticality);
+        if (accounts == null || accounts.isEmpty()) {
+            logger.warn("getByAccountsAndCriticality called with null or empty accounts; returning empty list.");
+            return Collections.emptyList();
+        }
+        List<BudgetTransaction> result = new ArrayList<>();
+        for (BudgetTransaction tx : transactions) {
+            boolean matchesCriticality = (criticality == null || criticality.equalsIgnoreCase(tx.getCriticality()));
+            if (matchesCriticality) {
+                for (String acct : accounts) {
+                    if (acct == null) continue;
+                    if (acct.equalsIgnoreCase(tx.getAccount())) {
+                        result.add(tx);
+                        break; // Avoid duplicates if multiple accounts match
+                    } else if ((acct.equalsIgnoreCase("Josh") || acct.equalsIgnoreCase("Anna"))
+                            && "Joint".equalsIgnoreCase(tx.getAccount())) {
+                        BudgetTransaction splitTx = splitJointTransactionForAccount(tx, acct);
+                        if (splitTx != null) {
+                            result.add(splitTx);
+                        }
+                    }
+                }
+            }
+        }
+        logger.info("getByAccountsAndCriticality returning {} transactions", result.size());
+        return result;
+    }
+
+    /**
+     * Returns all transactions for the given list of accounts, regardless of criticality.
+     * Splits "Joint" transactions for Josh/Anna as needed.
+     * @param accounts List of accounts (e.g., ["Anna", "Joint"] or ["Josh", "Joint"])
+     * @return List of BudgetTransaction
+     */
+    public List<BudgetTransaction> getByAccounts(List<String> accounts) {
+        logger.info("getByAccounts called with accounts='{}'", accounts);
+        if (accounts == null || accounts.isEmpty()) {
+            logger.warn("getByAccounts called with null or empty accounts; returning empty list.");
+            return Collections.emptyList();
+        }
+        List<BudgetTransaction> result = new ArrayList<>();
+        for (BudgetTransaction tx : transactions) {
+            for (String acct : accounts) {
+                if (acct == null) continue;
+                if (acct.equalsIgnoreCase(tx.getAccount())) {
+                    result.add(tx);
+                    break;
+                } else if ((acct.equalsIgnoreCase("Josh") || acct.equalsIgnoreCase("Anna"))
+                        && "Joint".equalsIgnoreCase(tx.getAccount())) {
+                    BudgetTransaction splitTx = splitJointTransactionForAccount(tx, acct);
+                    if (splitTx != null) {
+                        result.add(splitTx);
+                    }
+                }
+            }
+        }
+        logger.info("getByAccounts returning {} transactions", result.size());
+        return result;
+    }
+
     // ------------------- Totals and Amounts -------------------
 
     /**
