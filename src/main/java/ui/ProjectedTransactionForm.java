@@ -92,7 +92,7 @@ public class ProjectedTransactionForm extends JDialog {
         okBtn.addActionListener(e -> {
             logger.info("OK clicked in ProjectedTransactionForm.");
             String name = nameField.getText().trim();
-            String amount = amountField.getText().trim();
+            String amountRaw = amountField.getText().trim();
 
             // Validate required fields
             if (name.isEmpty()) {
@@ -100,24 +100,25 @@ public class ProjectedTransactionForm extends JDialog {
                 JOptionPane.showMessageDialog(this, "Name is required.", "Validation Error", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            if (amount.isEmpty()) {
+            if (amountRaw.isEmpty()) {
                 logger.warn("Validation failed: Amount is required.");
                 JOptionPane.showMessageDialog(this, "Amount is required.", "Validation Error", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            // Validate amount is a number
-            try {
-                Double.parseDouble(amount.replace("$", "").replace(",", ""));
-            } catch (NumberFormatException ex) {
-                logger.warn("Validation failed: Amount '{}' is not a valid number.", amount);
+            // Normalize and validate amount (always $ and two decimals)
+            String normalizedAmount = normalizeAmount(amountRaw);
+            if (normalizedAmount == null) {
+                logger.warn("Validation failed: Amount '{}' is not a valid number.", amountRaw);
                 JOptionPane.showMessageDialog(this, "Amount must be a valid number (e.g., 12.34).", "Validation Error", JOptionPane.WARNING_MESSAGE);
                 return;
             }
+            // Optionally update field so user sees normalized value
+            amountField.setText(normalizedAmount);
 
             try {
                 result = new ProjectedTransaction(
                         name,
-                        amount,
+                        normalizedAmount,
                         categoryField.getText(),
                         (String) criticalityCombo.getSelectedItem(),
                         "", // Transaction Date removed
@@ -144,6 +145,29 @@ public class ProjectedTransactionForm extends JDialog {
         btns.add(okBtn);
         btns.add(cancelBtn);
         add(btns, BorderLayout.SOUTH);
+    }
+
+    /**
+     * Ensures the amount string is always "$" + two decimals.
+     * Accepts raw numbers like "225", "225.5", "$225", "$225.50", "225.56".
+     * Returns normalized string, or null if not numeric.
+     */
+    private String normalizeAmount(String userInput) {
+        logger.info("normalizeAmount called with userInput='{}'", userInput);
+        if (userInput == null || userInput.trim().isEmpty()) {
+            logger.warn("normalizeAmount received null or empty input");
+            return null;
+        }
+        String cleaned = userInput.replace("$", "").replace(",", "").trim();
+        try {
+            double value = Double.parseDouble(cleaned);
+            String formatted = String.format("$%.2f", value);
+            logger.info("normalizeAmount returning '{}'", formatted);
+            return formatted;
+        } catch (NumberFormatException e) {
+            logger.error("normalizeAmount parse error for '{}': {}", userInput, e.getMessage());
+            return null;
+        }
     }
 
     /**
