@@ -92,4 +92,17 @@ public class GenericTablePanel extends JPanel {
     public JTable getTable() {
         return table;
     }
+
+    public static String formatAmount(String rawAmount) {
+        if (rawAmount == null) return "$0.00";
+        String cleaned = rawAmount.replace("$", "").replace(",", "").trim();
+        try {
+            double value = Double.parseDouble(cleaned);
+            return String.format("$%.2f", value);
+        } catch (NumberFormatException e) {
+            // Log and default to $0.00 if parsing fails
+            logger.warn("formatAmount: could not parse '{}', defaulting to $0.00", rawAmount);
+            return "$0.00";
+        }
+    }
 }

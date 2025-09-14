@@ -18,6 +18,8 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static ui.GenericTablePanel.formatAmount;
+
 /**
  * Panel that displays total spending by category for a given account and criticality,
  * including projected transactions for the current statement period, highlighted in blue.
@@ -240,7 +242,7 @@ public class CategorySummaryPanel extends JPanel {
 
         String[] columns = {"Name", "Amount", "Category", "Criticality", "Transaction Date", "Account", "Statement Period"};
         GenericTablePanel panel = new GenericTablePanel(columns, tx -> new Object[] {
-                tx.getName(), tx.getAmount(), tx.getCategory(),
+                tx.getName(), formatAmount(tx.getAmount()), tx.getCategory(),
                 tx.getCriticality(), tx.getTransactionDate(), tx.getAccount(),
                 tx.getStatementPeriod()
         });

@@ -15,6 +15,8 @@ import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static ui.GenericTablePanel.formatAmount;
+
 /**
  * Panel that summarizes and displays weekly totals for a given category, based on statement-relative weeks.
  * Each week is 7 days, starting from the first of the month of statementStartDate. The last week may be shorter.
@@ -165,7 +167,7 @@ public class WeeklyBreakdownPanel extends JPanel {
                 tx -> new Object[] {
                         tx.getDate() != null ? tx.getDate().toString() : "",
                         tx.getName(),
-                        tx.getAmount(),
+                        formatAmount(tx.getAmount()),
                         tx.getCategory(),
                         tx.getCriticality(),
                         tx.getAccount()

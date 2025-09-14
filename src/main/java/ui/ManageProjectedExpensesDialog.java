@@ -15,6 +15,8 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.Locale;
 
+import static ui.GenericTablePanel.formatAmount;
+
 /**
  * Dialog for managing projected expenses by statement period.
  * Allows viewing, adding, editing, and deleting projected transactions.
@@ -104,7 +106,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
                 "Name", "Amount", "Category", "Criticality", "Account", "Created Time"
         };
         tablePanel = new GenericTablePanel(columns, tx -> new Object[] {
-                tx.getName(), tx.getAmount(), tx.getCategory(), tx.getCriticality(),
+                tx.getName(), formatAmount(tx.getAmount()), tx.getCategory(), tx.getCriticality(),
                 tx.getAccount(), tx.getCreatedTime()
         });
 
