@@ -152,20 +152,16 @@ public class LocalCacheService {
         save();
     }
 
-    /** @return Path to last open projected file */
-    public String getLastOpenProjectedFile() {
-        String path = props.getProperty(KEY_LAST_OPEN_PROJECTED_FILE, "");
-        logger.info("getLastOpenProjectedFile -> '{}'", path);
-        return path;
+    /**
+     * Gets the current statement period from config, logs the result.
+     *
+     */
+    public String getCurrentStatementPeriod() {
+        String period = props.getProperty(KEY_CURRENT_STATEMENT, "");
+        logger.info("getCurrentStatementPeriod -> '{}'", period);
+        return period;
     }
 
-    /** Store path to last open projected file */
-    public void setLastOpenProjectedFile(String path) {
-        logger.info("setLastOpenProjectedFile('{}')", path);
-        if (path == null) path = "";
-        props.setProperty(KEY_LAST_OPEN_PROJECTED_FILE, path);
-        save();
-    }
 
     /** @return List of recent budget files */
     public List<String> getRecentBudgetFiles() {
@@ -175,17 +171,6 @@ public class LocalCacheService {
         return new ArrayList<>(Arrays.asList(val.split("\\|")));
     }
 
-    /** Add a file to recent budget files, keeping max 5 */
-    public void addRecentBudgetFile(String path) {
-        logger.info("addRecentBudgetFile('{}')", path);
-        if (path == null || path.isEmpty()) return;
-        List<String> recents = getRecentBudgetFiles();
-        recents.remove(path);
-        recents.add(0, path);
-        while (recents.size() > 5) recents.remove(5);
-        props.setProperty(KEY_RECENT_BUDGET_FILES, String.join("|", recents));
-        save();
-    }
 
     /** @return List of recent projected files */
     public List<String> getRecentProjectedFiles() {
@@ -195,17 +180,6 @@ public class LocalCacheService {
         return new ArrayList<>(Arrays.asList(val.split("\\|")));
     }
 
-    /** Add a file to recent projected files, keeping max 5 */
-    public void addRecentProjectedFile(String path) {
-        logger.info("addRecentProjectedFile('{}')", path);
-        if (path == null || path.isEmpty()) return;
-        List<String> recents = getRecentProjectedFiles();
-        recents.remove(path);
-        recents.add(0, path);
-        while (recents.size() > 5) recents.remove(5);
-        props.setProperty(KEY_RECENT_PROJECTED_FILES, String.join("|", recents));
-        save();
-    }
 
     // --- Statement period persistence API ---
 

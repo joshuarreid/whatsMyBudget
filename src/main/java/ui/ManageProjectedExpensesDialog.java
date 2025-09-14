@@ -121,7 +121,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
 
     /**
      * Reloads the list of available statement periods from both persisted periods and projected transactions.
-     * Populates the period combo box. Preserves current selection if possible.
+     * Populates the period combo box. Defaults to current statement period if present.
      */
     private void reloadPeriods() {
         logger.info("Reloading statement periods for projected expenses.");
@@ -142,18 +142,26 @@ public class ManageProjectedExpensesDialog extends JDialog {
             allPeriods.addAll(projectionPeriods);
 
             String currentSelection = (String) periodCombo.getSelectedItem();
+            String currentStatementPeriod = localCacheService.getCurrentStatementPeriod();
+            logger.info("Current statement period from cache: '{}'", currentStatementPeriod);
 
             // Populate combo box, sorted
             periodCombo.removeAllItems();
-            for (String period : allPeriods.stream().sorted().collect(Collectors.toList())) {
+            List<String> sortedPeriods = allPeriods.stream().sorted().collect(Collectors.toList());
+            for (String period : sortedPeriods) {
                 periodCombo.addItem(period);
             }
 
-            // Restore selection if possible
-            if (currentSelection != null && allPeriods.contains(currentSelection)) {
+            // Always default to current statement period if present
+            if (currentStatementPeriod != null && allPeriods.contains(currentStatementPeriod)) {
+                periodCombo.setSelectedItem(currentStatementPeriod);
+                logger.info("Set periodCombo to current statement period '{}'", currentStatementPeriod);
+            } else if (currentSelection != null && allPeriods.contains(currentSelection)) {
                 periodCombo.setSelectedItem(currentSelection);
-            } else if (!allPeriods.isEmpty()) {
-                periodCombo.setSelectedItem(allPeriods.stream().sorted().findFirst().orElse(null));
+                logger.info("Restored previous selection '{}'", currentSelection);
+            } else if (!sortedPeriods.isEmpty()) {
+                periodCombo.setSelectedItem(sortedPeriods.get(0));
+                logger.info("No current or previous selection found, set to first available '{}'", sortedPeriods.get(0));
             }
             logger.info("Total unique statement periods loaded: {}", allPeriods.size());
         } catch (Exception ex) {
