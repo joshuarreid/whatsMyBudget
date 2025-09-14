@@ -45,6 +45,7 @@ public class ProjectedTransactionForm extends JDialog {
      * @param tx The ProjectedTransaction to edit, or null to add.
      */
     private void buildForm(ProjectedTransaction tx) {
+        logger.info("Building ProjectedTransactionForm fields.");
         setLayout(new BorderLayout());
         JPanel fields = new JPanel(new GridLayout(0, 2, 4, 4));
 
@@ -90,10 +91,33 @@ public class ProjectedTransactionForm extends JDialog {
 
         okBtn.addActionListener(e -> {
             logger.info("OK clicked in ProjectedTransactionForm.");
+            String name = nameField.getText().trim();
+            String amount = amountField.getText().trim();
+
+            // Validate required fields
+            if (name.isEmpty()) {
+                logger.warn("Validation failed: Name is required.");
+                JOptionPane.showMessageDialog(this, "Name is required.", "Validation Error", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (amount.isEmpty()) {
+                logger.warn("Validation failed: Amount is required.");
+                JOptionPane.showMessageDialog(this, "Amount is required.", "Validation Error", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            // Validate amount is a number
+            try {
+                Double.parseDouble(amount.replace("$", "").replace(",", ""));
+            } catch (NumberFormatException ex) {
+                logger.warn("Validation failed: Amount '{}' is not a valid number.", amount);
+                JOptionPane.showMessageDialog(this, "Amount must be a valid number (e.g., 12.34).", "Validation Error", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
             try {
                 result = new ProjectedTransaction(
-                        nameField.getText(),
-                        amountField.getText(),
+                        name,
+                        amount,
                         categoryField.getText(),
                         (String) criticalityCombo.getSelectedItem(),
                         "", // Transaction Date removed
