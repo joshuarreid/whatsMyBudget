@@ -6,19 +6,17 @@ import util.AppLogger;
 
 import javax.swing.*;
 import java.awt.*;
-import java.time.Month;
 import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Dialog for previewing, assigning statement periods, and confirming imported transactions.
- * Allows "Apply to All" and per-row editing of statement period before confirming import.
- * Always validates before enabling import.
+ * Dialog for previewing and confirming imported transactions.
+ * No statement period assignment or validation is performed.
+ * User simply reviews, confirms import, or cancels.
  */
 public class ImportDialog extends JDialog {
     private static final Logger logger = AppLogger.getLogger(ImportDialog.class);
 
-    private final PeriodSelectorPanel periodSelectorPanel;
     private final ImportTablePanel importTablePanel;
     private final JButton importButton;
     private final JButton cancelButton;
@@ -38,10 +36,7 @@ public class ImportDialog extends JDialog {
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(1100, 600));
 
-        periodSelectorPanel = new PeriodSelectorPanel(this::applyPeriodToAll);
-        add(periodSelectorPanel, BorderLayout.NORTH);
-
-        importTablePanel = new ImportTablePanel(transactions, this::validateAndMaybeEnableImport);
+        importTablePanel = new ImportTablePanel(transactions, this::updateImportButtonState);
         add(importTablePanel, BorderLayout.CENTER);
 
         JPanel bottomPanel = new JPanel(new BorderLayout());
@@ -51,7 +46,7 @@ public class ImportDialog extends JDialog {
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         importButton = new JButton("Import");
-        importButton.setEnabled(false);
+        importButton.setEnabled(!transactions.isEmpty());
         cancelButton = new JButton("Cancel");
         buttonPanel.add(importButton);
         buttonPanel.add(cancelButton);
@@ -62,12 +57,12 @@ public class ImportDialog extends JDialog {
         importButton.addActionListener(e -> {
             logger.info("User clicked Import in ImportDialog.");
             List<BudgetTransaction> txs = importTablePanel.getTransactions();
-            if (!validateAllPeriods(txs)) {
-                errorLabel.setText("Please fix all statement periods before importing.");
-                logger.warn("Attempted import with invalid statement periods.");
+            if (txs == null || txs.isEmpty()) {
+                errorLabel.setText("No transactions to import.");
+                logger.warn("Attempted import with empty transaction list.");
                 return;
             }
-            logger.info("ImportDialog: Validation passed. Sending {} transactions to callback.", txs.size());
+            logger.info("ImportDialog: Sending {} transactions to callback.", txs.size());
             onImport.accept(txs);
             dispose();
         });
@@ -79,41 +74,17 @@ public class ImportDialog extends JDialog {
 
         pack();
         setLocationRelativeTo(parent);
-        validateAndMaybeEnableImport();
+        updateImportButtonState();
     }
 
     /**
-     * Applies the selected period to all transactions in the table.
+     * Enables or disables the import button based on transaction presence.
      */
-    private void applyPeriodToAll(Month month, Integer year) {
-        logger.info("Applying period to all transactions: {} {}", month, year);
-        importTablePanel.applyPeriodToAll(month, year);
-        validateAndMaybeEnableImport();
-    }
-
-    /**
-     * Validates all statement periods and enables/disables import button accordingly.
-     */
-    private void validateAndMaybeEnableImport() {
+    private void updateImportButtonState() {
         List<BudgetTransaction> txs = importTablePanel.getTransactions();
-        boolean valid = validateAllPeriods(txs);
-        importButton.setEnabled(valid && !txs.isEmpty());
-        errorLabel.setText(valid ? "" : "Please fix all statement periods before importing.");
-        logger.info("Validating statement periods: valid={}, transactionCount={}", valid, txs != null ? txs.size() : 0);
-    }
-
-    /**
-     * Returns true if all statement periods in the list are valid and non-empty.
-     */
-    private boolean validateAllPeriods(List<BudgetTransaction> txs) {
-        if (txs == null) return false;
-        for (BudgetTransaction tx : txs) {
-            String period = tx.getStatementPeriod();
-            if (period == null || period.isBlank() || !util.StatementPeriodUtil.isValidStatementPeriod(period)) {
-                logger.debug("Invalid statement period detected: '{}', transaction: {}", period, tx);
-                return false;
-            }
-        }
-        return true;
+        boolean enabled = txs != null && !txs.isEmpty();
+        importButton.setEnabled(enabled);
+        errorLabel.setText(enabled ? "" : "No transactions to import.");
+        logger.info("Import button state updated: enabled={}, transactionCount={}", enabled, txs != null ? txs.size() : 0);
     }
 }

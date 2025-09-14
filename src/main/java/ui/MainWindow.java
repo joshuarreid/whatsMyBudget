@@ -183,6 +183,7 @@ public class MainWindow extends JFrame {
      * Handles the Import Transactions workflow.
      * Prompts user to pick a Notion-exported CSV, parses transactions, checks for duplicates,
      * previews, and imports new transactions and refreshes UI.
+     * No statement period is assigned or prompted during import.
      */
     private void handleImportTransactions() {
         logger.info("Starting import transactions workflow.");
@@ -270,7 +271,7 @@ public class MainWindow extends JFrame {
             return;
         }
 
-        // Step 2: Show ImportDialog for user review and confirmation (no statement period dialog)
+        // Step 2: Show ImportDialog for user review and confirmation (no statement period dialog, no assignment)
         ImportDialog importDialog = new ImportDialog(this, importedTxs, (List<BudgetTransaction> confirmedTxs) -> {
             try {
                 // Only import non-duplicate transactions
@@ -393,4 +394,5 @@ public class MainWindow extends JFrame {
             msg.append("\n\nIf the problem persists, try opening the CSV in a plain text editor and verify every row matches the header column count.");
             JOptionPane.showMessageDialog(this, msg.toString(), "Budget CSV Load Error", JOptionPane.ERROR_MESSAGE);
         }
-    }}
+    }
+}
