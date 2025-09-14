@@ -5,6 +5,8 @@ import model.BudgetTransactionList;
 import model.ProjectedTransaction;
 import org.slf4j.Logger;
 import util.AppLogger;
+import util.ProjectedTransactionUtil;
+import service.CSVStateService;
 
 import javax.swing.*;
 import java.awt.*;
@@ -37,6 +39,43 @@ public class AnnaViewPanel extends IndividualViewPanel {
         // Set up click listeners for both summary tables
         getEssentialPanel().setCategoryRowClickListener(category -> handleCategoryRowClick(category, true));
         getNonEssentialPanel().setCategoryRowClickListener(category -> handleCategoryRowClick(category, false));
+    }
+
+    /**
+     * Loads all data for this view from the CSVStateService, using the current statement period.
+     * This will refresh both real and projected transactions for this account.
+     * @param stateService CSVStateService to pull statement period and data from
+     */
+    public void loadDataFromStateService(CSVStateService stateService) {
+        logger.info("loadDataFromStateService called for AnnaViewPanel.");
+        if (stateService == null) {
+            logger.error("CSVStateService is null, cannot load data.");
+            setTransactions((BudgetTransactionList) null);
+            setProjectedTransactions(null);
+            return;
+        }
+        String currentPeriod = stateService.getCurrentStatementPeriod();
+        logger.info("Retrieved current statement period for Anna: '{}'", currentPeriod);
+
+        List<BudgetTransaction> allTransactions = stateService.getCurrentTransactions();
+        logger.info("Retrieved {} current transactions from state service.", allTransactions.size());
+        // Filter for Anna's account
+        List<BudgetTransaction> filteredTransactions = allTransactions.stream()
+                .filter(tx -> "Anna".equalsIgnoreCase(tx.getAccount()))
+                .collect(Collectors.toList());
+        logger.info("Filtered to {} transactions for account='Anna'.", filteredTransactions.size());
+        setTransactions(filteredTransactions);
+
+        // Get all projections for this period
+        List<ProjectedTransaction> allProjectionsForPeriod = (currentPeriod == null)
+                ? Collections.emptyList()
+                : stateService.getProjectedTransactionsForPeriod(currentPeriod);
+        logger.info("Retrieved {} projected transactions for period '{}'.", allProjectionsForPeriod.size(), currentPeriod);
+
+        // Use utility to split "Joint" projections for Anna
+        List<ProjectedTransaction> personalizedProjections = ProjectedTransactionUtil.splitJointProjectedTransactionsForAccount(allProjectionsForPeriod, "Anna");
+        logger.info("After splitting, {} projected transactions for Anna.", personalizedProjections.size());
+        setProjectedTransactions(personalizedProjections);
     }
 
     /**

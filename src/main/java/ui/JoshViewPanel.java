@@ -5,6 +5,7 @@ import model.BudgetTransactionList;
 import model.ProjectedTransaction;
 import org.slf4j.Logger;
 import util.AppLogger;
+import util.ProjectedTransactionUtil;
 import service.CSVStateService;
 
 import javax.swing.*;
@@ -65,13 +66,16 @@ public class JoshViewPanel extends IndividualViewPanel {
         logger.info("Filtered to {} transactions for account='Josh'.", filteredTransactions.size());
         setTransactions(filteredTransactions);
 
-        List<ProjectedTransaction> projections = (currentPeriod == null)
+        // Get all projections for this period
+        List<ProjectedTransaction> allProjectionsForPeriod = (currentPeriod == null)
                 ? Collections.emptyList()
-                : stateService.getProjectedTransactionsForPeriod(currentPeriod).stream()
-                .filter(tx -> "Josh".equalsIgnoreCase(tx.getAccount()))
-                .collect(Collectors.toList());
-        logger.info("Filtered to {} projected transactions for account='Josh'.", projections.size());
-        setProjectedTransactions(projections);
+                : stateService.getProjectedTransactionsForPeriod(currentPeriod);
+        logger.info("Retrieved {} projected transactions for period '{}'.", allProjectionsForPeriod.size(), currentPeriod);
+
+        // Use utility to split "Joint" projections for Josh
+        List<ProjectedTransaction> personalizedProjections = ProjectedTransactionUtil.splitJointProjectedTransactionsForAccount(allProjectionsForPeriod, "Josh");
+        logger.info("After splitting, {} projected transactions for Josh.", personalizedProjections.size());
+        setProjectedTransactions(personalizedProjections);
     }
 
     /**
