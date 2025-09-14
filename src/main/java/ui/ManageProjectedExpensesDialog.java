@@ -42,7 +42,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
      * @param parent Parent window
      * @param csvStateService Reference to the service for projected expense operations
      * @param localCacheService Reference to the local cache service for settings
-     * @param refreshCallback Callback to refresh UI after changes
+     * @param refreshCallback Callback to refresh UI after changes (called only when dialog closes)
      */
     public ManageProjectedExpensesDialog(Window parent,
                                          CSVStateService csvStateService,
@@ -56,6 +56,21 @@ public class ManageProjectedExpensesDialog extends JDialog {
         setSize(850, 500);
         setLocationRelativeTo(parent);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+
+        // Add window listener to call refreshCallback only when dialog closes
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent e) {
+                logger.info("ManageProjectedExpensesDialog window closed, calling refreshCallback if not null.");
+                if (refreshCallback != null) refreshCallback.run();
+            }
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                logger.info("ManageProjectedExpensesDialog window closing, calling refreshCallback if not null.");
+                if (refreshCallback != null) refreshCallback.run();
+            }
+        });
+
         buildUI();
         logger.info("ManageProjectedExpensesDialog initialized.");
     }
@@ -74,6 +89,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
             logger.info("Statement period dropdown changed, selected '{}'", selectedPeriod);
             localCacheService.setCurrentStatementPeriod(selectedPeriod);
             loadPeriod();
+            // Do NOT call refreshCallback here; only on dialog close
         });
         topPanel.add(periodCombo);
 
@@ -105,7 +121,8 @@ public class ManageProjectedExpensesDialog extends JDialog {
         editBtn.addActionListener(e -> editProjected());
         deleteBtn.addActionListener(e -> deleteProjected());
         closeBtn.addActionListener(e -> {
-            logger.info("ManageProjectedExpensesDialog closed by user.");
+            logger.info("ManageProjectedExpensesDialog closed by user (Close button).");
+            // Will trigger windowClosed/windowClosing event and refresh main UI
             dispose();
         });
 
