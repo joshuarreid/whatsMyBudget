@@ -8,8 +8,10 @@ import util.AppLogger;
 import service.CSVStateService;
 
 import javax.swing.*;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.MatteBorder;
+import javax.swing.plaf.basic.BasicScrollBarUI;
+import javax.swing.table.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -24,6 +26,7 @@ import static ui.GenericTablePanel.formatAmount;
  * Panel that displays total spending by category for a given account and criticality,
  * including projected transactions for the current statement period, highlighted in blue.
  * Both real and projected transactions are included in the table and grand total.
+ * UI inspired by modern budgeting apps: flat, blue, whitespace, clean grouping.
  * Robust to null/empty input, includes full logging, and is ready for future drilldown.
  */
 public class CategorySummaryPanel extends JPanel {
@@ -43,13 +46,85 @@ public class CategorySummaryPanel extends JPanel {
         logger.info("CategorySummaryPanel created for account='{}', criticality='{}'", account, criticality);
         this.account = account;
         this.criticality = criticality;
+
+        setOpaque(false);
+
+        JPanel cardPanel = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int arc = 10;
+                int shadow = 3;
+                Color shadowColor = new Color(0, 0, 0, 10);
+                g2d.setColor(shadowColor);
+                g2d.fillRoundRect(shadow, shadow, getWidth() - shadow * 2, getHeight() - shadow * 2, arc, arc);
+                g2d.setColor(getBackground());
+                g2d.fillRoundRect(0, 0, getWidth() - shadow, getHeight() - shadow, arc, arc);
+                g2d.dispose();
+            }
+        };
+        cardPanel.setOpaque(false);
+        cardPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
+        cardPanel.setBackground(Color.WHITE);
+
+        JLabel titleLabel = new JLabel(
+                "<html><span style=\"font-size:12pt;font-weight:600;color:#253858;\">" +
+                        (account != null ? account : "All Accounts") +
+                        " &mdash; " +
+                        (criticality != null ? criticality : "All Criticalities") +
+                        "</span></html>"
+        );
+        titleLabel.setBorder(new EmptyBorder(0, 0, 5, 0));
+        cardPanel.add(titleLabel, BorderLayout.NORTH);
+
         this.tableModel = new DefaultTableModel(new String[]{"Category", "Total Amount", "Type"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
         };
-        this.table = new JTable(tableModel);
-        this.table.setDefaultRenderer(Object.class, new ProjectedCategoryCellRenderer());
-        this.add(new JScrollPane(table), BorderLayout.CENTER);
+        this.table = new JTable(tableModel) {
+            @Override
+            public Component prepareRenderer(TableCellRenderer renderer, int row, int column) {
+                Component c = super.prepareRenderer(renderer, row, column);
+                // Subtle separator for compact rows
+                if (!isRowSelected(row) && c instanceof JComponent jc) {
+                    jc.setBorder(new MatteBorder(0, 0, 1, 0, new Color(234, 236, 240)));
+                }
+                return c;
+            }
+        };
+
+        this.table.setDefaultRenderer(Object.class, new ModernCategoryCellRenderer());
+        this.table.setRowHeight(22); // compact
+        this.table.setShowGrid(false);
+        this.table.setIntercellSpacing(new Dimension(0, 0));
+        this.table.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        this.table.setSelectionBackground(new Color(232, 242, 255));
+        this.table.setSelectionForeground(Color.BLACK);
+
+        JTableHeader header = this.table.getTableHeader();
+        header.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        header.setBackground(new Color(244, 247, 255));
+        header.setForeground(new Color(26, 68, 151));
+        header.setBorder(new MatteBorder(0, 0, 2, 0, new Color(210, 220, 240)));
+        header.setPreferredSize(new Dimension(header.getWidth(), 24));
+        ((DefaultTableCellRenderer) header.getDefaultRenderer()).setHorizontalAlignment(SwingConstants.LEFT);
+        header.setOpaque(true);
+        header.setReorderingAllowed(false);
+
+        JScrollPane scrollPane = new JScrollPane(table);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.getVerticalScrollBar().setUI(new BasicScrollBarUI() {
+            protected void configureScrollBarColors(){
+                this.thumbColor = new Color(210, 220, 240);
+                this.trackColor = new Color(245, 247, 250);
+            }
+        });
+
+        cardPanel.add(scrollPane, BorderLayout.CENTER);
+        add(cardPanel, BorderLayout.CENTER);
+
         setupTableRowClickListener();
     }
 
@@ -184,20 +259,61 @@ public class CategorySummaryPanel extends JPanel {
     }
 
     /**
-     * Table cell renderer to highlight projected rows in blue.
+     * Modern cell renderer for clean, web-like look with blue accent, bold for totals/projected.
      */
-    private static class ProjectedCategoryCellRenderer extends DefaultTableCellRenderer {
-        private static final Color PROJECTION_BLUE = new Color(180, 210, 255);
+    private static class ModernCategoryCellRenderer extends DefaultTableCellRenderer {
+        private static final Color PROJECTION_BLUE = new Color(222, 236, 253);
+        private static final Color TOTAL_BG = new Color(237, 242, 250);
+        private static final Color HOVER_BG = new Color(244, 247, 255);
+        private static final Color CATEGORY_TEXT = new Color(30, 61, 161);
+
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int column) {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
             DefaultTableModel model = (DefaultTableModel) table.getModel();
             Object typeObj = model.getValueAt(row, 2);
-            if (typeObj != null && "Projected".equalsIgnoreCase(typeObj.toString())) {
+            Object catObj = model.getValueAt(row, 0);
+
+            // Clean base
+            c.setForeground(new Color(41, 47, 64));
+            c.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            setBorder(noFocusBorder);
+
+            // TOTAL row
+            if (catObj != null && "TOTAL".equalsIgnoreCase(catObj.toString())) {
+                c.setBackground(TOTAL_BG);
+                c.setFont(c.getFont().deriveFont(Font.BOLD, 12f));
+                c.setForeground(new Color(26, 68, 151));
+            }
+            // Projected row
+            else if (typeObj != null && "Projected".equalsIgnoreCase(typeObj.toString())) {
                 c.setBackground(PROJECTION_BLUE);
+                c.setFont(c.getFont().deriveFont(Font.BOLD, 12f));
+                c.setForeground(new Color(44, 88, 182));
+            }
+            // Hover/selected row
+            else if (isSelected) {
+                c.setBackground(HOVER_BG);
+                c.setFont(c.getFont().deriveFont(Font.PLAIN));
+            }
+            // Normal row
+            else {
+                c.setBackground(Color.WHITE);
+                c.setFont(c.getFont().deriveFont(Font.PLAIN));
+            }
+
+            // Blue accent for "Category" column except TOTAL
+            if (column == 0) {
+                if (catObj != null && !"TOTAL".equalsIgnoreCase(catObj.toString())) {
+                    setForeground(CATEGORY_TEXT);
+                    setFont(getFont().deriveFont(Font.BOLD, 12f));
+                }
+                setHorizontalAlignment(SwingConstants.LEFT);
+            } else if (column == 1) {
+                setHorizontalAlignment(SwingConstants.RIGHT);
             } else {
-                c.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
+                setHorizontalAlignment(SwingConstants.CENTER);
             }
             return c;
         }
@@ -225,6 +341,17 @@ public class CategorySummaryPanel extends JPanel {
                     }
                 } else if (row == tableModel.getRowCount() - 1) {
                     logger.info("Totals row clicked (ignored).");
+                }
+            }
+        });
+        table.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                int row = table.rowAtPoint(e.getPoint());
+                if (row >= 0 && row < tableModel.getRowCount() - 1) {
+                    table.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                } else {
+                    table.setCursor(Cursor.getDefaultCursor());
                 }
             }
         });
