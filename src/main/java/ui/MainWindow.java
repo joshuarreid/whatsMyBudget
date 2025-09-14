@@ -303,7 +303,17 @@ public class MainWindow extends JFrame {
             JOptionPane.showMessageDialog(this, "Application error: Service unavailable.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        ManageProjectedExpensesDialog dialog = new ManageProjectedExpensesDialog(this, csvStateService, this::reloadAndRefreshAllPanels);
+        if (cache == null) {
+            logger.error("localCacheService is null in handleManageProjectedExpenses.");
+            JOptionPane.showMessageDialog(this, "Application error: Local cache service unavailable.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        ManageProjectedExpensesDialog dialog = new ManageProjectedExpensesDialog(
+                this,
+                csvStateService,
+                cache,
+                this::reloadAndRefreshAllPanels
+        );
         dialog.setVisible(true);
     }
 

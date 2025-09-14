@@ -4,6 +4,7 @@ import model.ProjectedTransaction;
 import org.slf4j.Logger;
 import util.AppLogger;
 import service.CSVStateService;
+import service.LocalCacheService;
 
 import javax.swing.*;
 import java.awt.*;
@@ -16,11 +17,13 @@ import java.util.Locale;
 /**
  * Dialog for managing projected expenses by statement period.
  * Allows viewing, adding, editing, and deleting projected transactions.
+ * Ensures the table always reflects the latest CSV content for the selected period.
  */
 public class ManageProjectedExpensesDialog extends JDialog {
     private static final Logger logger = AppLogger.getLogger(ManageProjectedExpensesDialog.class);
 
     private final CSVStateService csvStateService;
+    private final LocalCacheService localCacheService;
     private final Runnable refreshCallback;
 
     private JComboBox<String> periodCombo;
@@ -37,12 +40,17 @@ public class ManageProjectedExpensesDialog extends JDialog {
      * Constructs the dialog for managing projected expenses.
      * @param parent Parent window
      * @param csvStateService Reference to the service for projected expense operations
+     * @param localCacheService Reference to the local cache service for settings
      * @param refreshCallback Callback to refresh UI after changes
      */
-    public ManageProjectedExpensesDialog(Window parent, CSVStateService csvStateService, Runnable refreshCallback) {
+    public ManageProjectedExpensesDialog(Window parent,
+                                         CSVStateService csvStateService,
+                                         LocalCacheService localCacheService,
+                                         Runnable refreshCallback) {
         super(parent, "Manage Projected Expenses", ModalityType.APPLICATION_MODAL);
         logger.info("Initializing ManageProjectedExpensesDialog.");
         this.csvStateService = csvStateService;
+        this.localCacheService = localCacheService;
         this.refreshCallback = refreshCallback;
         setSize(850, 500);
         setLocationRelativeTo(parent);
@@ -60,7 +68,12 @@ public class ManageProjectedExpensesDialog extends JDialog {
         topPanel.add(new JLabel("Statement Period:"));
         periodCombo = new JComboBox<>();
         reloadPeriods();
-        periodCombo.addActionListener(e -> loadPeriod());
+        periodCombo.addActionListener(e -> {
+            String selectedPeriod = (String) periodCombo.getSelectedItem();
+            logger.info("Statement period dropdown changed, selected '{}'", selectedPeriod);
+            localCacheService.setCurrentStatementPeriod(selectedPeriod);
+            loadPeriod();
+        });
         topPanel.add(periodCombo);
 
         JButton addPeriodBtn = new JButton("Add Period");
@@ -105,6 +118,10 @@ public class ManageProjectedExpensesDialog extends JDialog {
         loadPeriod();
     }
 
+    /**
+     * Reloads the list of available statement periods from all projected transactions.
+     * Populates the period combo box.
+     */
     private void reloadPeriods() {
         logger.info("Reloading statement periods for projected expenses.");
         try {
@@ -124,10 +141,15 @@ public class ManageProjectedExpensesDialog extends JDialog {
         }
     }
 
+    /**
+     * Loads and displays projected transactions for the currently selected statement period.
+     * Always fetches from CSV to ensure the UI is up to date.
+     */
     private void loadPeriod() {
         String period = (String) periodCombo.getSelectedItem();
         logger.info("Loading projected expenses for statement period '{}'.", period);
         if (period == null) {
+            logger.warn("No statement period selected.");
             tablePanel.setTransactions(List.of());
             currentTransactions = List.of();
             return;
@@ -145,6 +167,9 @@ public class ManageProjectedExpensesDialog extends JDialog {
         }
     }
 
+    /**
+     * Allows user to add a new statement period (e.g. "SEPTEMBER2025").
+     */
     private void addPeriod() {
         logger.info("User requested to add a new statement period.");
         JPanel panel = new JPanel(new GridLayout(2, 2, 6, 6));
@@ -165,6 +190,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
                 periodCombo.addItem(period);
                 periodCombo.setSelectedItem(period);
                 logger.info("Added new statement period '{}'.", period);
+                localCacheService.setCurrentStatementPeriod(period);
             } else {
                 logger.warn("Invalid statement period input. Month: '{}', Year: '{}'", month, year);
                 JOptionPane.showMessageDialog(this, "Please enter a valid year (e.g., 2025).", "Invalid Input", JOptionPane.WARNING_MESSAGE);
@@ -174,15 +200,24 @@ public class ManageProjectedExpensesDialog extends JDialog {
         }
     }
 
+    /**
+     * Formats the statement period name (e.g., "SEPTEMBER2025").
+     * @param month Month string
+     * @param year Four-digit year string
+     * @return Statement period name
+     */
     private static String formatStatementPeriod(String month, String year) {
         String formatted = month == null ? "" : month.trim().toUpperCase(Locale.ENGLISH);
-        // Remove spaces and any non-alpha characters
         formatted = formatted.replaceAll("[^A-Z]", "");
         String period = formatted + year;
         logger.info("Formatted statement period: '{}'", period);
         return period;
     }
 
+    /**
+     * Handles adding a new projected transaction.
+     * After a successful add, reloads the table for the selected period from CSV.
+     */
     private void addProjected() {
         logger.info("User requested to add projected expense.");
         String period = (String) periodCombo.getSelectedItem();
@@ -198,7 +233,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
                 csvStateService.addProjectedTransaction(tx);
                 logger.info("Added projected transaction: {}", tx);
                 loadPeriod();
-                refreshCallback.run();
+                if (refreshCallback != null) refreshCallback.run();
             } catch (Exception ex) {
                 logger.error("Failed to add projected transaction: {}", ex.getMessage(), ex);
                 JOptionPane.showMessageDialog(this, "Failed to add projected expense: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -208,6 +243,10 @@ public class ManageProjectedExpensesDialog extends JDialog {
         }
     }
 
+    /**
+     * Handles editing the selected projected transaction.
+     * After a successful edit, reloads the table for the selected period from CSV.
+     */
     private void editProjected() {
         logger.info("User requested to edit projected expense.");
         int row = tablePanel.getTable().getSelectedRow();
@@ -224,7 +263,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
                 csvStateService.updateProjectedTransaction(orig, tx);
                 logger.info("Edited projected transaction: {} -> {}", orig, tx);
                 loadPeriod();
-                refreshCallback.run();
+                if (refreshCallback != null) refreshCallback.run();
             } catch (Exception ex) {
                 logger.error("Failed to edit projected transaction: {}", ex.getMessage(), ex);
                 JOptionPane.showMessageDialog(this, "Failed to edit projected expense: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -234,6 +273,10 @@ public class ManageProjectedExpensesDialog extends JDialog {
         }
     }
 
+    /**
+     * Handles deleting the selected projected transaction.
+     * After a successful delete, reloads the table for the selected period from CSV.
+     */
     private void deleteProjected() {
         logger.info("User requested to delete projected expense.");
         int row = tablePanel.getTable().getSelectedRow();
@@ -248,7 +291,7 @@ public class ManageProjectedExpensesDialog extends JDialog {
                 csvStateService.deleteProjectedTransaction(tx);
                 logger.info("Deleted projected transaction: {}", tx);
                 loadPeriod();
-                refreshCallback.run();
+                if (refreshCallback != null) refreshCallback.run();
             } catch (Exception ex) {
                 logger.error("Failed to delete projected transaction: {}", ex.getMessage(), ex);
                 JOptionPane.showMessageDialog(this, "Failed to delete projected expense: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);

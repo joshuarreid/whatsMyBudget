@@ -16,13 +16,20 @@ import java.util.stream.Collectors;
 /**
  * Implements CSVFileService for BudgetRow objects.
  * Provides robust file creation and header validation.
+ *
+ * Only the following columns are used for the working budget CSV:
+ * Name,Amount,Category,Criticality,Transaction Date,Account,status,Created time,Payment Method
+ * (No "Statement Period" column for transaction CSVs.)
  */
 @Service
 public class BudgetFileService implements CSVFileService<BudgetRow> {
     private static final Logger logger = AppLogger.getLogger(BudgetFileService.class);
 
     private final String filePath;
-    private final List<String> headers = BudgetRowConverter.headers();
+    // This must exactly match the columns in your working CSV file.
+    private final List<String> headers = Arrays.asList(
+            "Name","Amount","Category","Criticality","Transaction Date","Account","status","Created time","Payment Method"
+    );
 
     public BudgetFileService(String filePath) {
         this.filePath = filePath;
@@ -67,7 +74,7 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
 
     /**
      * Ensures the CSV file has the correct header row as the first line.
-     * If the file is empty or header is missing/invalid, writes the correct header.
+     * If the file is empty or header is missing/invalid, writes the correct header and keeps data rows.
      */
     private void ensureCsvHeader(File file) throws IOException {
         List<String> lines = Files.readAllLines(file.toPath());
@@ -78,16 +85,12 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
             String firstLine = lines.get(0).trim();
             String expectedHeader = String.join(",", headers);
             if (!firstLine.equals(expectedHeader)) {
-                logger.warn("CSV file {} missing or invalid header. Rewriting header.", file.getAbsolutePath());
+                logger.warn("CSV file {} missing or invalid header. Expected: '{}', Found: '{}'. Rewriting header.", file.getAbsolutePath(), expectedHeader, firstLine);
                 try (FileWriter writer = new FileWriter(file, false)) {
                     writer.write(expectedHeader);
                     writer.write(System.lineSeparator());
-                    if (!firstLine.isEmpty() && !firstLine.contains(",Amount,")) {
-                        for (String line : lines) {
-                            writer.write(line);
-                            writer.write(System.lineSeparator());
-                        }
-                    } else if (lines.size() > 1) {
+                    // Write back all lines *except* the original (bad) header, if applicable.
+                    if (lines.size() > 1) {
                         for (int i = 1; i < lines.size(); i++) {
                             writer.write(lines.get(i));
                             writer.write(System.lineSeparator());
@@ -99,6 +102,10 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
         }
     }
 
+    /**
+     * Reads all BudgetRow objects from the CSV file.
+     * @return List of BudgetRow objects (may be empty).
+     */
     @Override
     public List<BudgetRow> readAll() {
         logger.info("readAll called for filePath={}", filePath);
@@ -115,11 +122,16 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
         } catch (IOException e) {
             logger.error("Failed to read CSV file '{}': {}", filePath, e.getMessage());
         } catch (CsvValidationException e) {
+            logger.error("CSV validation exception while reading '{}': {}", filePath, e.getMessage());
             throw new RuntimeException(e);
         }
         return rows;
     }
 
+    /**
+     * Adds a BudgetRow to the CSV file.
+     * @param transaction The BudgetRow to add.
+     */
     @Override
     public void add(BudgetRow transaction) {
         logger.info("add called for filePath={}, transaction={}", filePath, transaction);
@@ -147,6 +159,13 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
         }
     }
 
+    /**
+     * Updates the first matching BudgetRow by key/value with the provided row.
+     * @param key The column to match
+     * @param value The value to match
+     * @param updatedRow The new row to write in place
+     * @return true if a row was updated
+     */
     @Override
     public boolean update(String key, String value, BudgetRow updatedRow) {
         logger.info("update called for key={}, value={}, filePath={}", key, value, filePath);
@@ -171,6 +190,12 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
         return updated;
     }
 
+    /**
+     * Deletes the first matching BudgetRow by key/value.
+     * @param key The column to match
+     * @param value The value to match
+     * @return true if a row was deleted
+     */
     @Override
     public boolean delete(String key, String value) {
         logger.info("delete called for key={}, value={}, filePath={}", key, value, filePath);
@@ -193,6 +218,10 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
         }
     }
 
+    /**
+     * Gets the standard headers for the working budget CSV file.
+     * @return List of header strings.
+     */
     @Override
     public List<String> getHeaders() {
         logger.info("getHeaders called for filePath={}", filePath);
@@ -200,6 +229,10 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
         return new ArrayList<>(headers);
     }
 
+    /**
+     * Writes all BudgetRow objects to the CSV file (overwrites file).
+     * @param rows The rows to write.
+     */
     private void writeAll(List<BudgetRow> rows) {
         logger.info("writeAll called for filePath={} with {} rows", filePath, rows.size());
         ensureCsvFileReady();

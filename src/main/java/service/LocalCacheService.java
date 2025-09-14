@@ -136,6 +136,22 @@ public class LocalCacheService {
         save();
     }
 
+    /**
+     * Sets the current statement period for the application, logs and validates input.
+     * @param period The statement period string to set as current (e.g., "SEPTEMBER2025")
+     */
+    public void setCurrentStatementPeriod(String period) {
+        logger.info("setCurrentStatementPeriod('{}') called.", period);
+        if (period == null || period.trim().isEmpty()) {
+            logger.warn("Attempted to set blank/null current statement period.");
+            props.remove(KEY_CURRENT_STATEMENT);
+        } else {
+            props.setProperty(KEY_CURRENT_STATEMENT, period.trim());
+            logger.info("Set current statement period to '{}'.", period.trim());
+        }
+        save();
+    }
+
     /** @return Path to last open projected file */
     public String getLastOpenProjectedFile() {
         String path = props.getProperty(KEY_LAST_OPEN_PROJECTED_FILE, "");

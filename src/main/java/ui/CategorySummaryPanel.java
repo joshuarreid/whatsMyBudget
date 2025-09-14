@@ -5,6 +5,7 @@ import model.BudgetTransactionList;
 import model.ProjectedTransaction;
 import org.slf4j.Logger;
 import util.AppLogger;
+import service.CSVStateService;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -19,7 +20,9 @@ import java.util.stream.Collectors;
 
 /**
  * Panel that displays total spending by category for a given account and criticality,
- * including projected expenses as a highlighted "Projected" category.
+ * including projected expenses as a highlighted "Projected" category (blue row).
+ * Projections shown are those passed in via setProjectedTransactions, which
+ * must be pre-filtered for the currently selected statement period.
  * Robust to null/empty input, includes full logging, and is ready for future drilldown.
  */
 public class CategorySummaryPanel extends JPanel {
@@ -29,6 +32,9 @@ public class CategorySummaryPanel extends JPanel {
     private final JTable table;
     private final DefaultTableModel tableModel;
     private Consumer<String> categoryRowClickListener;
+    /**
+     * The list of projected transactions to display. Must already be filtered by statement period.
+     */
     private List<ProjectedTransaction> projectedTransactions = Collections.emptyList();
 
     /**
@@ -52,6 +58,42 @@ public class CategorySummaryPanel extends JPanel {
     }
 
     /**
+     * Loads all data for this summary panel from the CSVStateService, using the current statement period.
+     * This will refresh both real and projected transactions for this account/criticality.
+     * @param stateService CSVStateService to pull statement period and data from
+     */
+    public void loadDataFromStateService(CSVStateService stateService) {
+        logger.info("loadDataFromStateService called for account='{}', criticality='{}'", account, criticality);
+        if (stateService == null) {
+            logger.error("CSVStateService is null, cannot load data.");
+            setTransactions((List<BudgetTransaction>) null);
+            setProjectedTransactions(null);
+            return;
+        }
+        String currentPeriod = stateService.getCurrentStatementPeriod();
+        logger.info("Retrieved current statement period: '{}'", currentPeriod);
+
+        List<BudgetTransaction> allTransactions = stateService.getCurrentTransactions();
+        logger.info("Retrieved {} current transactions from state service.", allTransactions.size());
+        // Filter for account and criticality
+        List<BudgetTransaction> filteredTransactions = allTransactions.stream()
+                .filter(tx -> account == null || account.equalsIgnoreCase(tx.getAccount()))
+                .filter(tx -> criticality == null || criticality.equalsIgnoreCase(tx.getCriticality()))
+                .collect(Collectors.toList());
+        logger.info("Filtered to {} transactions for account='{}', criticality='{}'.", filteredTransactions.size(), account, criticality);
+        setTransactions(filteredTransactions);
+
+        List<ProjectedTransaction> projections = (currentPeriod == null)
+                ? Collections.emptyList()
+                : stateService.getProjectedTransactionsForPeriod(currentPeriod).stream()
+                .filter(tx -> account == null || account.equalsIgnoreCase(tx.getAccount()))
+                .filter(tx -> criticality == null || criticality.equalsIgnoreCase(tx.getCriticality()))
+                .collect(Collectors.toList());
+        logger.info("Filtered to {} projected transactions for account='{}', criticality='{}'.", projections.size(), account, criticality);
+        setProjectedTransactions(projections);
+    }
+
+    /**
      * Registers a listener that is called when a category row is clicked.
      * @param listener Consumer receiving the clicked category name (String)
      */
@@ -62,38 +104,63 @@ public class CategorySummaryPanel extends JPanel {
 
     /**
      * Sets the projected transactions list to be displayed as the "Projected" category.
-     * @param projected List of ProjectedTransaction (may be null or empty)
+     * This list MUST already be filtered for the current statement period.
+     * Triggers a table refresh.
+     * @param projected List of ProjectedTransaction (must be for the current statement period)
      */
     public void setProjectedTransactions(List<ProjectedTransaction> projected) {
-        logger.info("setProjectedTransactions called with {} projected(s) for account '{}', criticality '{}'",
+        logger.info("setProjectedTransactions called with {} projected(s) for account '{}', criticality '{}'. "
+                        + "Input must be filtered for the current statement period.",
                 projected == null ? 0 : projected.size(), account, criticality);
-        if (projected == null) {
-            this.projectedTransactions = Collections.emptyList();
-        } else {
-            this.projectedTransactions = projected.stream()
-                    .filter(pt -> account == null || account.equalsIgnoreCase(pt.getAccount()))
-                    .filter(pt -> criticality == null || criticality.equalsIgnoreCase(pt.getCriticality()))
-                    .collect(Collectors.toList());
-        }
-        logger.info("Filtered to {} projected transactions for display.", this.projectedTransactions.size());
+        this.projectedTransactions = (projected == null) ? Collections.emptyList() : projected;
+        logger.info("Set {} projected transactions for display.", this.projectedTransactions.size());
+        refreshTable();
     }
 
     /**
      * Sets transactions to summarize and display by category, including a totals row at the bottom.
      * Also adds a "Projected" row if projected transactions are present.
+     * Triggers a table refresh.
      * @param transactions List of BudgetTransaction (may be null or empty)
      */
     public void setTransactions(List<BudgetTransaction> transactions) {
         logger.info("setTransactions called with {} transaction(s) for account '{}', criticality '{}'",
                 transactions == null ? 0 : transactions.size(), account, criticality);
+        this.lastTransactions = transactions;
+        refreshTable();
+    }
+
+    /**
+     * Convenient overload that takes a BudgetTransactionList and uses its filtering.
+     * @param transactionList The BudgetTransactionList to summarize
+     */
+    public void setTransactions(BudgetTransactionList transactionList) {
+        logger.info("setTransactions(BudgetTransactionList) called for account='{}', criticality='{}'", account, criticality);
+        if (transactionList == null) {
+            logger.warn("Null BudgetTransactionList provided to setTransactions; clearing table.");
+            setTransactions((List<BudgetTransaction>) null);
+            return;
+        }
+        setTransactions(transactionList.getByAccountAndCriticality(account, criticality));
+    }
+
+    // Store the last base transactions to enable projection refresh
+    private List<BudgetTransaction> lastTransactions = null;
+
+    /**
+     * Recomputes and repopulates the table rows using the last provided transactions and projections.
+     * This ensures the table updates when either setTransactions or setProjectedTransactions is called.
+     */
+    private void refreshTable() {
+        logger.info("refreshTable called for account '{}', criticality '{}'", account, criticality);
         tableModel.setRowCount(0);
         // Filter real transactions
-        List<BudgetTransaction> filtered = (transactions == null) ? Collections.emptyList() :
-                transactions.stream()
+        List<BudgetTransaction> filtered = (lastTransactions == null) ? Collections.emptyList() :
+                lastTransactions.stream()
                         .filter(tx -> (account == null || account.equalsIgnoreCase(tx.getAccount())))
                         .filter(tx -> (criticality == null || criticality.equalsIgnoreCase(tx.getCriticality())))
                         .collect(Collectors.toList());
-        logger.info("Filtered to {} transactions for summary.", filtered.size());
+        logger.info("Filtered to {} base transactions for summary.", filtered.size());
         Map<String, Double> totalsByCategory = filtered.stream()
                 .collect(Collectors.groupingBy(
                         tx -> tx.getCategory() == null ? "(Uncategorized)" : tx.getCategory(),
@@ -107,7 +174,7 @@ public class CategorySummaryPanel extends JPanel {
             grandTotal += entry.getValue();
         }
 
-        // Add Projected row if needed
+        // Add Projected row if needed, in blue
         if (!projectedTransactions.isEmpty()) {
             double projectedTotal = projectedTransactions.stream()
                     .mapToDouble(ProjectedTransaction::getAmountValue)
@@ -127,32 +194,18 @@ public class CategorySummaryPanel extends JPanel {
     }
 
     /**
-     * Convenient overload that takes a BudgetTransactionList and uses its filtering.
-     * @param transactionList The BudgetTransactionList to summarize
-     */
-    public void setTransactions(BudgetTransactionList transactionList) {
-        logger.info("setTransactions(BudgetTransactionList) called for account='{}', criticality='{}'", account, criticality);
-        if (transactionList == null) {
-            logger.warn("Null BudgetTransactionList provided to setTransactions; clearing table.");
-            setTransactions((List<BudgetTransaction>) null);
-            return;
-        }
-        setTransactions(transactionList.getByAccountAndCriticality(account, criticality));
-    }
-
-    /**
-     * Table cell renderer to highlight the "Projected" category row in yellow.
+     * Table cell renderer to highlight the "Projected" category row in blue.
      */
     private static class ProjectedCategoryCellRenderer extends DefaultTableCellRenderer {
+        private static final Color PROJECTION_BLUE = new Color(180, 210, 255);
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus,
-                                                       int row, int column) {
+                                                       boolean isSelected, boolean hasFocus, int row, int column) {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
             DefaultTableModel model = (DefaultTableModel) table.getModel();
             Object catObj = model.getValueAt(row, 0);
             if (catObj != null && "Projected".equalsIgnoreCase(catObj.toString())) {
-                c.setBackground(Color.YELLOW);
+                c.setBackground(PROJECTION_BLUE);
             } else {
                 c.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
             }
