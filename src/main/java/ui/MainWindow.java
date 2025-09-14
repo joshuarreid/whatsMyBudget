@@ -322,6 +322,13 @@ public class MainWindow extends JFrame {
      * If loading fails, shows a user-facing dialog with the error details and guidance.
      * Also warns if the file is empty or only contains duplicates, but only after an import/user action.
      */
+// ... (rest of MainWindow unchanged)
+
+    /**
+     * Reloads transactions from the current working file (via CSVStateService) and refreshes all view panels.
+     * If loading fails, shows a user-facing dialog with the error details and guidance.
+     * Also warns if the file is empty or only contains duplicates, but only after an import/user action.
+     */
     public void reloadAndRefreshAllPanels() {
         logger.info("Reloading transactions and refreshing all UI panels.");
         if (csvStateService == null) {
@@ -369,12 +376,12 @@ public class MainWindow extends JFrame {
                         JOptionPane.WARNING_MESSAGE);
             }
 
-            BudgetTransactionList allTransactions = new BudgetTransactionList(txs, "Main Budget Transactions");
-            joshViewPanel.setTransactions(allTransactions);
-            jointViewPanel.setTransactions(allTransactions);
-            annaViewPanel.setTransactions(allTransactions);
+            // Use the new data load method to ensure both actuals and projections are loaded per view
+            joshViewPanel.loadDataFromStateService(csvStateService);
+//            jointViewPanel.loadDataFromStateService(csvStateService);
+//            annaViewPanel.loadDataFromStateService(csvStateService);
 
-            logger.info("All panels refreshed with latest transaction data ({} transactions).", (txs == null ? 0 : txs.size()));
+            logger.info("All panels refreshed with latest transaction and projections data ({} transactions).", (txs == null ? 0 : txs.size()));
         } catch (Exception e) {
             logger.error("Failed to reload and refresh panels: {}", e.getMessage(), e);
             String csvPath = null;
@@ -393,5 +400,4 @@ public class MainWindow extends JFrame {
             msg.append("\n\nIf the problem persists, try opening the CSV in a plain text editor and verify every row matches the header column count.");
             JOptionPane.showMessageDialog(this, msg.toString(), "Budget CSV Load Error", JOptionPane.ERROR_MESSAGE);
         }
-    }
-}
+    }}

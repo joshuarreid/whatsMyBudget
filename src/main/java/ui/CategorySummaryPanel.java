@@ -20,9 +20,8 @@ import java.util.stream.Collectors;
 
 /**
  * Panel that displays total spending by category for a given account and criticality,
- * including projected expenses as a highlighted "Projected" category (blue row).
- * Projections shown are those passed in via setProjectedTransactions, which
- * must be pre-filtered for the currently selected statement period.
+ * including projected transactions for the current statement period, highlighted in blue.
+ * Both real and projected transactions are included in the table and grand total.
  * Robust to null/empty input, includes full logging, and is ready for future drilldown.
  */
 public class CategorySummaryPanel extends JPanel {
@@ -33,21 +32,16 @@ public class CategorySummaryPanel extends JPanel {
     private final DefaultTableModel tableModel;
     private Consumer<String> categoryRowClickListener;
     /**
-     * The list of projected transactions to display. Must already be filtered by statement period.
+     * The list of projected transactions to display. Must already be filtered for the current statement period.
      */
     private List<ProjectedTransaction> projectedTransactions = Collections.emptyList();
 
-    /**
-     * Constructs a summary panel for a specific account and criticality.
-     * @param account     Account to filter on (e.g., "Josh", "Anna", "Joint")
-     * @param criticality Criticality to filter on ("Essential" or "NonEssential")
-     */
     public CategorySummaryPanel(String account, String criticality) {
         super(new BorderLayout());
         logger.info("CategorySummaryPanel created for account='{}', criticality='{}'", account, criticality);
         this.account = account;
         this.criticality = criticality;
-        this.tableModel = new DefaultTableModel(new String[]{"Category", "Total Amount"}, 0) {
+        this.tableModel = new DefaultTableModel(new String[]{"Category", "Total Amount", "Type"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
         };
@@ -57,11 +51,6 @@ public class CategorySummaryPanel extends JPanel {
         setupTableRowClickListener();
     }
 
-    /**
-     * Loads all data for this summary panel from the CSVStateService, using the current statement period.
-     * This will refresh both real and projected transactions for this account/criticality.
-     * @param stateService CSVStateService to pull statement period and data from
-     */
     public void loadDataFromStateService(CSVStateService stateService) {
         logger.info("loadDataFromStateService called for account='{}', criticality='{}'", account, criticality);
         if (stateService == null) {
@@ -75,7 +64,6 @@ public class CategorySummaryPanel extends JPanel {
 
         List<BudgetTransaction> allTransactions = stateService.getCurrentTransactions();
         logger.info("Retrieved {} current transactions from state service.", allTransactions.size());
-        // Filter for account and criticality
         List<BudgetTransaction> filteredTransactions = allTransactions.stream()
                 .filter(tx -> account == null || account.equalsIgnoreCase(tx.getAccount()))
                 .filter(tx -> criticality == null || criticality.equalsIgnoreCase(tx.getCriticality()))
@@ -93,21 +81,11 @@ public class CategorySummaryPanel extends JPanel {
         setProjectedTransactions(projections);
     }
 
-    /**
-     * Registers a listener that is called when a category row is clicked.
-     * @param listener Consumer receiving the clicked category name (String)
-     */
     public void setCategoryRowClickListener(Consumer<String> listener) {
         logger.info("setCategoryRowClickListener called.");
         this.categoryRowClickListener = listener;
     }
 
-    /**
-     * Sets the projected transactions list to be displayed as the "Projected" category.
-     * This list MUST already be filtered for the current statement period.
-     * Triggers a table refresh.
-     * @param projected List of ProjectedTransaction (must be for the current statement period)
-     */
     public void setProjectedTransactions(List<ProjectedTransaction> projected) {
         logger.info("setProjectedTransactions called with {} projected(s) for account '{}', criticality '{}'. "
                         + "Input must be filtered for the current statement period.",
@@ -117,12 +95,6 @@ public class CategorySummaryPanel extends JPanel {
         refreshTable();
     }
 
-    /**
-     * Sets transactions to summarize and display by category, including a totals row at the bottom.
-     * Also adds a "Projected" row if projected transactions are present.
-     * Triggers a table refresh.
-     * @param transactions List of BudgetTransaction (may be null or empty)
-     */
     public void setTransactions(List<BudgetTransaction> transactions) {
         logger.info("setTransactions called with {} transaction(s) for account '{}', criticality '{}'",
                 transactions == null ? 0 : transactions.size(), account, criticality);
@@ -130,10 +102,6 @@ public class CategorySummaryPanel extends JPanel {
         refreshTable();
     }
 
-    /**
-     * Convenient overload that takes a BudgetTransactionList and uses its filtering.
-     * @param transactionList The BudgetTransactionList to summarize
-     */
     public void setTransactions(BudgetTransactionList transactionList) {
         logger.info("setTransactions(BudgetTransactionList) called for account='{}', criticality='{}'", account, criticality);
         if (transactionList == null) {
@@ -144,57 +112,73 @@ public class CategorySummaryPanel extends JPanel {
         setTransactions(transactionList.getByAccountAndCriticality(account, criticality));
     }
 
-    // Store the last base transactions to enable projection refresh
     private List<BudgetTransaction> lastTransactions = null;
 
     /**
-     * Recomputes and repopulates the table rows using the last provided transactions and projections.
-     * This ensures the table updates when either setTransactions or setProjectedTransactions is called.
+     * Repopulates the table showing both real and projected category totals,
+     * with projected rows highlighted blue and included in the grand total.
      */
     private void refreshTable() {
         logger.info("refreshTable called for account '{}', criticality '{}'", account, criticality);
         tableModel.setRowCount(0);
-        // Filter real transactions
         List<BudgetTransaction> filtered = (lastTransactions == null) ? Collections.emptyList() :
                 lastTransactions.stream()
                         .filter(tx -> (account == null || account.equalsIgnoreCase(tx.getAccount())))
                         .filter(tx -> (criticality == null || criticality.equalsIgnoreCase(tx.getCriticality())))
                         .collect(Collectors.toList());
         logger.info("Filtered to {} base transactions for summary.", filtered.size());
-        Map<String, Double> totalsByCategory = filtered.stream()
+
+        // Aggregate real transactions
+        Map<String, Double> realTotals = filtered.stream()
                 .collect(Collectors.groupingBy(
                         tx -> tx.getCategory() == null ? "(Uncategorized)" : tx.getCategory(),
                         Collectors.summingDouble(BudgetTransaction::getAmountValue)
                 ));
-        logger.info("Aggregated spending into {} categories.", totalsByCategory.size());
+
+        // Aggregate projected transactions
+        Map<String, Double> projectedTotals = projectedTransactions.stream()
+                .collect(Collectors.groupingBy(
+                        tx -> tx.getCategory() == null ? "(Uncategorized)" : tx.getCategory(),
+                        Collectors.summingDouble(ProjectedTransaction::getAmountValue)
+                ));
+
+        logger.info("Aggregated {} real categories, {} projected categories.", realTotals.size(), projectedTotals.size());
+
+        // Get union of all categories for consistent display order
+        Set<String> allCategories = new TreeSet<>();
+        allCategories.addAll(realTotals.keySet());
+        allCategories.addAll(projectedTotals.keySet());
 
         double grandTotal = 0.0;
-        for (Map.Entry<String, Double> entry : totalsByCategory.entrySet()) {
-            tableModel.addRow(new Object[]{entry.getKey(), String.format("$%.2f", entry.getValue())});
-            grandTotal += entry.getValue();
+
+        for (String category : allCategories) {
+            boolean hasReal = realTotals.containsKey(category);
+            boolean hasProj = projectedTotals.containsKey(category);
+
+            if (hasReal) {
+                double val = realTotals.get(category);
+                tableModel.addRow(new Object[]{category, String.format("$%.2f", val), "Actual"});
+                grandTotal += val;
+            }
+            if (hasProj) {
+                double val = projectedTotals.get(category);
+                tableModel.addRow(new Object[]{category, String.format("$%.2f", val), "Projected"});
+                grandTotal += val;
+            }
         }
 
-        // Add Projected row if needed, in blue
-        if (!projectedTransactions.isEmpty()) {
-            double projectedTotal = projectedTransactions.stream()
-                    .mapToDouble(ProjectedTransaction::getAmountValue)
-                    .sum();
-            tableModel.addRow(new Object[]{"Projected", String.format("$%.2f", projectedTotal)});
-            logger.info("Added Projected row: Projected = ${}", String.format("%.2f", projectedTotal));
-            grandTotal += projectedTotal;
-        }
-
+        logger.info("Aggregated {} real categories, {} projected categories.", realTotals.size(), projectedTotals.size());
         logger.info("Category summary table populated with {} rows.", tableModel.getRowCount());
 
-        // Add totals row if there was at least one category or projected row
-        if (!totalsByCategory.isEmpty() || !projectedTransactions.isEmpty()) {
-            tableModel.addRow(new Object[]{"TOTAL", String.format("$%.2f", grandTotal)});
+        // Add totals row if there was at least one category row
+        if (!allCategories.isEmpty()) {
+            tableModel.addRow(new Object[]{"TOTAL", String.format("$%.2f", grandTotal), ""});
             logger.info("Totals row added: TOTAL = ${}", String.format("%.2f", grandTotal));
         }
     }
 
     /**
-     * Table cell renderer to highlight the "Projected" category row in blue.
+     * Table cell renderer to highlight projected rows in blue.
      */
     private static class ProjectedCategoryCellRenderer extends DefaultTableCellRenderer {
         private static final Color PROJECTION_BLUE = new Color(180, 210, 255);
@@ -203,8 +187,8 @@ public class CategorySummaryPanel extends JPanel {
                                                        boolean isSelected, boolean hasFocus, int row, int column) {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
             DefaultTableModel model = (DefaultTableModel) table.getModel();
-            Object catObj = model.getValueAt(row, 0);
-            if (catObj != null && "Projected".equalsIgnoreCase(catObj.toString())) {
+            Object typeObj = model.getValueAt(row, 2);
+            if (typeObj != null && "Projected".equalsIgnoreCase(typeObj.toString())) {
                 c.setBackground(PROJECTION_BLUE);
             } else {
                 c.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
@@ -213,11 +197,6 @@ public class CategorySummaryPanel extends JPanel {
         }
     }
 
-    /**
-     * Internal: Adds a mouse listener to the table for row click events.
-     * If the Projected row is clicked, shows a dialog of projected transactions.
-     * Otherwise, delegates to the row click listener if set.
-     */
     private void setupTableRowClickListener() {
         table.addMouseListener(new MouseAdapter() {
             @Override
@@ -227,7 +206,8 @@ public class CategorySummaryPanel extends JPanel {
                 // Exclude the totals row from click events
                 if (row >= 0 && row < tableModel.getRowCount() - 1) {
                     Object catObj = tableModel.getValueAt(row, 0);
-                    if (catObj != null && "Projected".equalsIgnoreCase(catObj.toString())) {
+                    Object typeObj = tableModel.getValueAt(row, 2);
+                    if (typeObj != null && "Projected".equalsIgnoreCase(typeObj.toString())) {
                         logger.info("Projected row clicked - showing projected transactions dialog.");
                         showProjectedTransactionsDialog();
                     } else if (categoryRowClickListener != null && catObj != null) {
@@ -244,18 +224,14 @@ public class CategorySummaryPanel extends JPanel {
         });
     }
 
-    /**
-     * Opens a dialog displaying the projected transactions in a table.
-     */
     private void showProjectedTransactionsDialog() {
         logger.info("showProjectedTransactionsDialog called with {} projected transactions.", projectedTransactions.size());
         if (projectedTransactions.isEmpty()) {
             JOptionPane.showMessageDialog(this, "No projected transactions found for this view.", "No Projected Expenses", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        // Map ProjectedTransaction to BudgetTransaction so we can reuse GenericTablePanel
         List<BudgetTransaction> asBudgetTransactions = projectedTransactions.stream()
-                .map(ProjectedTransaction::asBudgetTransaction) // You must implement this conversion in your model
+                .map(ProjectedTransaction::asBudgetTransaction)
                 .collect(Collectors.toList());
 
         String[] columns = {"Name", "Amount", "Category", "Criticality", "Transaction Date", "Account", "Statement Period"};

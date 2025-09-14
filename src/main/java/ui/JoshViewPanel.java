@@ -5,6 +5,7 @@ import model.BudgetTransactionList;
 import model.ProjectedTransaction;
 import org.slf4j.Logger;
 import util.AppLogger;
+import service.CSVStateService;
 
 import javax.swing.*;
 import java.awt.*;
@@ -37,6 +38,40 @@ public class JoshViewPanel extends IndividualViewPanel {
         // Set up click listeners for both summary tables
         getEssentialPanel().setCategoryRowClickListener(category -> handleCategoryRowClick(category, true));
         getNonEssentialPanel().setCategoryRowClickListener(category -> handleCategoryRowClick(category, false));
+    }
+
+    /**
+     * Loads all data for this view from the CSVStateService, using the current statement period.
+     * This will refresh both real and projected transactions for this account.
+     * @param stateService CSVStateService to pull statement period and data from
+     */
+    public void loadDataFromStateService(CSVStateService stateService) {
+        logger.info("loadDataFromStateService called for JoshViewPanel.");
+        if (stateService == null) {
+            logger.error("CSVStateService is null, cannot load data.");
+            setTransactions((BudgetTransactionList) null);
+            setProjectedTransactions(null);
+            return;
+        }
+        String currentPeriod = stateService.getCurrentStatementPeriod();
+        logger.info("Retrieved current statement period for Josh: '{}'", currentPeriod);
+
+        List<BudgetTransaction> allTransactions = stateService.getCurrentTransactions();
+        logger.info("Retrieved {} current transactions from state service.", allTransactions.size());
+        // Filter for Josh's account
+        List<BudgetTransaction> filteredTransactions = allTransactions.stream()
+                .filter(tx -> "Josh".equalsIgnoreCase(tx.getAccount()))
+                .collect(Collectors.toList());
+        logger.info("Filtered to {} transactions for account='Josh'.", filteredTransactions.size());
+        setTransactions(filteredTransactions);
+
+        List<ProjectedTransaction> projections = (currentPeriod == null)
+                ? Collections.emptyList()
+                : stateService.getProjectedTransactionsForPeriod(currentPeriod).stream()
+                .filter(tx -> "Josh".equalsIgnoreCase(tx.getAccount()))
+                .collect(Collectors.toList());
+        logger.info("Filtered to {} projected transactions for account='Josh'.", projections.size());
+        setProjectedTransactions(projections);
     }
 
     /**
