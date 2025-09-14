@@ -69,13 +69,13 @@ public class ManageProjectedExpensesDialog extends JDialog {
 
         add(topPanel, BorderLayout.NORTH);
 
-        // Table panel
+        // Table panel: Only visible columns: Name, Amount, Category, Criticality, Account, Created Time
         String[] columns = new String[] {
-                "Name", "Amount", "Category", "Criticality", "Transaction Date", "Account", "Status", "Created Time", "Payment Method"
+                "Name", "Amount", "Category", "Criticality", "Account", "Created Time"
         };
         tablePanel = new GenericTablePanel(columns, tx -> new Object[] {
                 tx.getName(), tx.getAmount(), tx.getCategory(), tx.getCriticality(),
-                tx.getTransactionDate(), tx.getAccount(), tx.getStatus(), tx.getCreatedTime(), tx.getPaymentMethod()
+                tx.getAccount(), tx.getCreatedTime()
         });
 
         add(tablePanel, BorderLayout.CENTER);

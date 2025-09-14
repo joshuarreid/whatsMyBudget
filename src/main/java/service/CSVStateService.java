@@ -186,36 +186,47 @@ public class CSVStateService {
     /**
      * Checks whether a BudgetRow matches all fields of a ProjectedTransaction.
      * Used for robust matching when no UUID is available.
+     * Only compares visible/editable fields: Name, Amount, Category, Criticality, Account, Created Time, Statement Period.
      */
     private boolean projectedTransactionEquals(BudgetRow row, ProjectedTransaction tx) {
-        if (row == null || tx == null) return false;
-        return Objects.equals(row.getName(), tx.getName())
-                && Objects.equals(row.getAmount(), tx.getAmount())
-                && Objects.equals(row.getCategory(), tx.getCategory())
-                && Objects.equals(row.getCriticality(), tx.getCriticality())
-                && Objects.equals(row.getTransactionDate(), tx.getTransactionDate())
-                && Objects.equals(row.getAccount(), tx.getAccount())
-                && Objects.equals(row.getStatus(), tx.getStatus())
-                && Objects.equals(row.getCreatedTime(), tx.getCreatedTime())
-                && Objects.equals(getStatementPeriodForRow(row), tx.getStatementPeriod());
+        logger.debug("Entering projectedTransactionEquals: row={}, tx={}", row, tx);
+        if (row == null || tx == null) {
+            logger.warn("projectedTransactionEquals: row or tx is null (row={}, tx={})", row, tx);
+            return false;
+        }
+        boolean match =
+                Objects.equals(row.getName(), tx.getName()) &&
+                        Objects.equals(row.getAmount(), tx.getAmount()) &&
+                        Objects.equals(row.getCategory(), tx.getCategory()) &&
+                        Objects.equals(row.getCriticality(), tx.getCriticality()) &&
+                        Objects.equals(row.getAccount(), tx.getAccount()) &&
+                        Objects.equals(row.getCreatedTime(), tx.getCreatedTime()) &&
+                        Objects.equals(getStatementPeriodForRow(row), tx.getStatementPeriod());
+        if (!match) {
+            logger.debug("projectedTransactionEquals: No match for row={} vs tx={}", row, tx);
+        } else {
+            logger.debug("projectedTransactionEquals: Match found for row={} and tx={}", row, tx);
+        }
+        return match;
     }
 
     /**
      * Builds a unique key for a BudgetRow for robust update/delete operations.
-     * For now, uses all significant fields concatenated (should move to UUID if available).
+     * Uses only fields shown in the current UI/table: Name, Amount, Category, Criticality, Account, Created Time, Statement Period.
      */
     private String buildRowUniqueKey(BudgetRow row) {
-        return String.join("|",
+        logger.debug("Entering buildRowUniqueKey for row={}", row);
+        String key = String.join("|",
                 Objects.toString(row.getName(), ""),
                 Objects.toString(row.getAmount(), ""),
                 Objects.toString(row.getCategory(), ""),
                 Objects.toString(row.getCriticality(), ""),
-                Objects.toString(row.getTransactionDate(), ""),
                 Objects.toString(row.getAccount(), ""),
-                Objects.toString(row.getStatus(), ""),
                 Objects.toString(row.getCreatedTime(), ""),
                 Objects.toString(getStatementPeriodForRow(row), "")
         );
+        logger.debug("buildRowUniqueKey: generated key={}", key);
+        return key;
     }
 
     /**

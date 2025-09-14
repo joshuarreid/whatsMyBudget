@@ -6,6 +6,8 @@ import util.AppLogger;
 
 import javax.swing.*;
 import java.awt.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Modal form dialog for creating or editing a ProjectedTransaction.
@@ -13,9 +15,14 @@ import java.awt.*;
 public class ProjectedTransactionForm extends JDialog {
     private static final Logger logger = AppLogger.getLogger(ProjectedTransactionForm.class);
 
-    private JTextField nameField, amountField, categoryField, criticalityField, dateField, accountField, statusField, createdField;
+    private JTextField nameField, amountField, categoryField, createdField;
+    private JComboBox<String> criticalityCombo, accountCombo;
     private final String statementPeriod;
     private ProjectedTransaction result = null;
+
+    // Possible values for Criticality and Account
+    private static final String[] CRITICALITIES = {"Essential", "NonEssential"};
+    private static final String[] ACCOUNTS = {"Josh", "Anna", "Joint"};
 
     /**
      * Constructs the modal form for adding or editing a ProjectedTransaction.
@@ -27,7 +34,7 @@ public class ProjectedTransactionForm extends JDialog {
         super(parent, tx == null ? "Add Projected Expense" : "Edit Projected Expense", ModalityType.APPLICATION_MODAL);
         logger.info("Initializing ProjectedTransactionForm for statementPeriod '{}', mode: {}", statementPeriod, tx == null ? "add" : "edit");
         this.statementPeriod = statementPeriod;
-        setSize(450, 330);
+        setSize(450, 270);
         setLocationRelativeTo(parent);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         buildForm(tx);
@@ -54,23 +61,25 @@ public class ProjectedTransactionForm extends JDialog {
         fields.add(categoryField);
 
         fields.add(new JLabel("Criticality:"));
-        criticalityField = new JTextField(tx == null ? "" : tx.getCriticality());
-        fields.add(criticalityField);
-
-        fields.add(new JLabel("Transaction Date:"));
-        dateField = new JTextField(tx == null ? "" : tx.getTransactionDate());
-        fields.add(dateField);
+        criticalityCombo = new JComboBox<>(CRITICALITIES);
+        if (tx != null && tx.getCriticality() != null) {
+            criticalityCombo.setSelectedItem(tx.getCriticality());
+        }
+        fields.add(criticalityCombo);
 
         fields.add(new JLabel("Account:"));
-        accountField = new JTextField(tx == null ? "" : tx.getAccount());
-        fields.add(accountField);
-
-        fields.add(new JLabel("Status:"));
-        statusField = new JTextField(tx == null ? "" : tx.getStatus());
-        fields.add(statusField);
+        accountCombo = new JComboBox<>(ACCOUNTS);
+        if (tx != null && tx.getAccount() != null) {
+            accountCombo.setSelectedItem(tx.getAccount());
+        }
+        fields.add(accountCombo);
 
         fields.add(new JLabel("Created Time:"));
-        createdField = new JTextField(tx == null ? "" : tx.getCreatedTime());
+        String createdTime = (tx == null || tx.getCreatedTime() == null || tx.getCreatedTime().isBlank())
+                ? LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                : tx.getCreatedTime();
+        createdField = new JTextField(createdTime);
+        createdField.setEditable(false);
         fields.add(createdField);
 
         add(fields, BorderLayout.CENTER);
@@ -86,10 +95,10 @@ public class ProjectedTransactionForm extends JDialog {
                         nameField.getText(),
                         amountField.getText(),
                         categoryField.getText(),
-                        criticalityField.getText(),
-                        dateField.getText(),
-                        accountField.getText(),
-                        statusField.getText(),
+                        (String) criticalityCombo.getSelectedItem(),
+                        "", // Transaction Date removed
+                        (String) accountCombo.getSelectedItem(),
+                        "", // Status removed
                         createdField.getText(),
                         statementPeriod
                 );

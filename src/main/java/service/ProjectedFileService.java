@@ -178,14 +178,30 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
         ensureCsvFileReady();
         List<BudgetRow> all = readAll();
         boolean updated = false;
-        for (int i = 0; i < all.size(); i++) {
-            BudgetRow row = all.get(i);
-            Map<String, String> rowMap = ProjectedRowConverter.budgetRowToMap(row);
-            if (rowMap.getOrDefault(key, "").equals(value)) {
-                all.set(i, updatedRow);
-                updated = true;
-                logger.info("Updated projected row with {}={} in projections CSV file '{}'", key, value, projectedFilePath);
-                break;
+
+        if ("UniqueMatch".equals(key)) {
+            logger.info("Performing update using UniqueMatch key for projections.");
+            for (int i = 0; i < all.size(); i++) {
+                BudgetRow row = all.get(i);
+                String rowKey = buildRowUniqueKey(row);
+                logger.debug("Comparing row key '{}' with value '{}'", rowKey, value);
+                if (rowKey.equals(value)) {
+                    all.set(i, updatedRow);
+                    updated = true;
+                    logger.info("Updated projected row by unique key in projections CSV file '{}'", projectedFilePath);
+                    break;
+                }
+            }
+        } else {
+            for (int i = 0; i < all.size(); i++) {
+                BudgetRow row = all.get(i);
+                Map<String, String> rowMap = ProjectedRowConverter.budgetRowToMap(row);
+                if (rowMap.getOrDefault(key, "").equals(value)) {
+                    all.set(i, updatedRow);
+                    updated = true;
+                    logger.info("Updated projected row with {}={} in projections CSV file '{}'", key, value, projectedFilePath);
+                    break;
+                }
             }
         }
         if (updated) {
@@ -202,12 +218,29 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
         ensureCsvFileReady();
         List<BudgetRow> all = readAll();
         int originalSize = all.size();
-        List<BudgetRow> newRows = all.stream()
-                .filter(row -> {
-                    Map<String, String> rowMap = ProjectedRowConverter.budgetRowToMap(row);
-                    return !rowMap.getOrDefault(key, "").equals(value);
-                })
-                .collect(Collectors.toList());
+        List<BudgetRow> newRows;
+
+        if ("UniqueMatch".equals(key)) {
+            logger.info("Performing delete using UniqueMatch key for projections.");
+            newRows = all.stream()
+                    .filter(row -> {
+                        String rowKey = buildRowUniqueKey(row);
+                        boolean keep = !rowKey.equals(value);
+                        logger.debug("Row key '{}' vs value '{}', keep: {}", rowKey, value, keep);
+                        return keep;
+                    })
+                    .collect(Collectors.toList());
+        } else {
+            newRows = all.stream()
+                    .filter(row -> {
+                        Map<String, String> rowMap = ProjectedRowConverter.budgetRowToMap(row);
+                        boolean keep = !rowMap.getOrDefault(key, "").equals(value);
+                        logger.debug("Row field '{}' vs value '{}', keep: {}", key, value, keep);
+                        return keep;
+                    })
+                    .collect(Collectors.toList());
+        }
+
         if (newRows.size() < originalSize) {
             writeAll(newRows);
             logger.info("Deleted projected row with {}={} from projections CSV file '{}'", key, value, projectedFilePath);
@@ -247,6 +280,38 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
             logger.info("Wrote {} rows to projections CSV file '{}'", rows.size(), projectedFilePath);
         } catch (IOException e) {
             logger.error("Failed to write to projections CSV file '{}': {}", projectedFilePath, e.getMessage());
+        }
+    }
+
+    /**
+     * Builds a unique key for a BudgetRow for robust update/delete operations.
+     * Uses only fields shown in the current UI/table: Name, Amount, Category, Criticality, Account, Created Time, Statement Period.
+     */
+    private String buildRowUniqueKey(BudgetRow row) {
+        logger.debug("Entering buildRowUniqueKey for row={}", row);
+        String key = String.join("|",
+                Objects.toString(row.getName(), ""),
+                Objects.toString(row.getAmount(), ""),
+                Objects.toString(row.getCategory(), ""),
+                Objects.toString(row.getCriticality(), ""),
+                Objects.toString(row.getAccount(), ""),
+                Objects.toString(row.getCreatedTime(), ""),
+                Objects.toString(getStatementPeriodForRow(row), "")
+        );
+        logger.debug("buildRowUniqueKey: generated key={}", key);
+        return key;
+    }
+
+    /**
+     * Retrieves the statement period for a BudgetRow, falling back to empty if not present.
+     */
+    private String getStatementPeriodForRow(BudgetRow row) {
+        if (row instanceof model.ProjectedTransaction) {
+            return ((model.ProjectedTransaction) row).getStatementPeriod();
+        } else if (row instanceof model.BudgetTransaction) {
+            return ((model.BudgetTransaction) row).getStatementPeriod();
+        } else {
+            return "";
         }
     }
 }
