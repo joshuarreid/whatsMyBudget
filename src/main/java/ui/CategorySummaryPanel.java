@@ -195,6 +195,7 @@ public class CategorySummaryPanel extends JPanel {
      * Repopulates the table showing both real and projected category totals,
      * with projected rows highlighted yellow and included in the grand total.
      * Always displays both actual and projected rows for the same category if both exist.
+     * Negative projected values (extra cash) are shown as positive and green.
      */
     private void refreshTable() {
         logger.info("refreshTable called for account '{}', criticality '{}'", account, criticality);
@@ -242,8 +243,14 @@ public class CategorySummaryPanel extends JPanel {
             }
             if (hasProj) {
                 double val = projectedTotals.get(category);
-                tableModel.addRow(new Object[]{category, String.format("$%.2f", val), "Projected"});
-                logger.debug("Added Projected row: Category='{}', Amount={}", category, val);
+                // If negative, show as positive (extra cash)
+                String displayAmount = (val < 0)
+                        ? String.format("$%.2f", Math.abs(val))
+                        : String.format("$%.2f", val);
+                boolean wasNegative = val < 0;
+                // Mark the value as green for rendering if negative; otherwise normal
+                tableModel.addRow(new Object[]{category, displayAmount + (wasNegative ? ":NEG" : ""), "Projected"});
+                logger.debug("Added Projected row: Category='{}', Amount={}, wasNegative={}", category, displayAmount, wasNegative);
                 grandTotal += val;
             }
         }
@@ -260,9 +267,11 @@ public class CategorySummaryPanel extends JPanel {
 
     /**
      * Modern cell renderer for clean, web-like look with yellow accent, bold for totals/projected.
+     * Displays negative projected values in green and without the minus sign.
      */
     private static class ModernCategoryCellRenderer extends DefaultTableCellRenderer {
         private static final Color PROJECTION_YELLOW = new Color(255, 249, 196); // Faint yellow
+        private static final Color PROJECTION_GREEN = new Color(0, 153, 0); // For extra cash (negative projected)
         private static final Color TOTAL_BG = new Color(237, 242, 250);
         private static final Color HOVER_BG = new Color(244, 247, 255);
         private static final Color CATEGORY_TEXT = new Color(30, 61, 161);
@@ -270,7 +279,15 @@ public class CategorySummaryPanel extends JPanel {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int column) {
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            // Remove marker if present and detect green highlight
+            boolean showGreen = false;
+            Object displayValue = value;
+            if (value instanceof String str && str.endsWith(":NEG")) {
+                displayValue = str.substring(0, str.length() - 4);
+                showGreen = true;
+            }
+
+            Component c = super.getTableCellRendererComponent(table, displayValue, isSelected, hasFocus, row, column);
             DefaultTableModel model = (DefaultTableModel) table.getModel();
             Object typeObj = model.getValueAt(row, 2);
             Object catObj = model.getValueAt(row, 0);
@@ -290,7 +307,14 @@ public class CategorySummaryPanel extends JPanel {
             else if (typeObj != null && "Projected".equalsIgnoreCase(typeObj.toString())) {
                 c.setBackground(PROJECTION_YELLOW);
                 c.setFont(c.getFont().deriveFont(Font.BOLD, 12f));
-                c.setForeground(new Color(140, 110, 0));
+                // For green: only apply to Amount column, and only if value is positive (was originally negative)
+                if (column == 1 && showGreen) {
+                    c.setForeground(PROJECTION_GREEN);
+                } else if (column == 1) {
+                    c.setForeground(new Color(140, 110, 0));
+                } else {
+                    c.setForeground(new Color(140, 110, 0));
+                }
             }
             // Hover/selected row
             else if (isSelected) {
