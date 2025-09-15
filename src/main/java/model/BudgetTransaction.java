@@ -69,7 +69,6 @@ public class BudgetTransaction extends BudgetRow {
      * @return the statement period this transaction is associated with
      */
     public String getStatementPeriod() {
-        logger.info("getStatementPeriod called, value={}", statementPeriod);
         return statementPeriod;
     }
 
