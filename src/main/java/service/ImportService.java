@@ -49,7 +49,24 @@ public class ImportService {
     }
 
     /**
-     * Utility to map column headers to indices.
+     * Maps logical field names to possible header variants.
+     */
+    private static Map<String, String[]> getLogicalToActualHeaders() {
+        Map<String, String[]> map = new HashMap<>();
+        map.put("name", new String[]{"name", "Name"});
+        map.put("amount", new String[]{"amount", "Amount"});
+        map.put("category", new String[]{"category", "Category"});
+        map.put("criticality", new String[]{"criticality", "Criticality"});
+        map.put("transaction date", new String[]{"transaction date", "Transaction Date"});
+        map.put("account", new String[]{"account", "Account"});
+        map.put("status", new String[]{"status", "Status"});
+        map.put("created time", new String[]{"created time", "Created time"});
+        map.put("payment method", new String[]{"payment method", "Payment Method"});
+        return map;
+    }
+
+    /**
+     * Utility to map column headers to indices, case-insensitive, trimmed.
      */
     private static Map<String, Integer> mapHeaderIndices(String[] headers) {
         Map<String, Integer> map = new HashMap<>();
@@ -61,14 +78,33 @@ public class ImportService {
     }
 
     /**
-     * Helper to get a field by header key (case insensitive) from a CSV row.
+     * Returns the index for a logical key by searching possible header names.
      */
-    private static String getField(String[] row, Map<String, Integer> headerMap, String key) {
-        Integer idx = headerMap.get(key.toLowerCase());
+    private static Integer getHeaderIndex(Map<String, Integer> headerMap, String... logicalNames) {
+        for (String name : logicalNames) {
+            Integer idx = headerMap.get(name.toLowerCase());
+            if (idx != null) return idx;
+        }
+        return null;
+    }
+
+    /**
+     * Gets a field by logical header key(s) from a CSV row.
+     * Tries all provided logical names for robustness.
+     */
+    private static String getField(String[] row, Map<String, Integer> headerMap, String... logicalNames) {
+        Integer idx = getHeaderIndex(headerMap, logicalNames);
         if (idx == null || idx >= row.length) return "";
         return row[idx] == null ? "" : row[idx].trim();
     }
 
+    /**
+     * Parses the given CSV file into a list of BudgetTransaction, without saving to the working file.
+     * Always maps fields by header name, robust to Notion/working file header variations.
+     * @param importFile The file to parse.
+     * @return List of BudgetTransaction objects parsed from the file.
+     * @throws Exception if parsing fails.
+     */
     public List<BudgetTransaction> parseFileToBudgetTransactions(File importFile) throws Exception {
         logger.info("parseFileToBudgetTransactions called for file: {}", importFile);
         List<BudgetTransaction> transactions = new ArrayList<>();
@@ -93,11 +129,12 @@ public class ImportService {
             }
             Map<String, Integer> headerMap = mapHeaderIndices(headers);
 
-            String[] required = {"name", "amount", "category", "criticality", "transaction date", "account", "status", "created time", "payment method"};
-            for (String req : required) {
-                if (!headerMap.containsKey(req)) {
-                    logger.error("Import file missing required column: {}", req);
-                    throw new IllegalArgumentException("Import file missing required column: " + req);
+            Map<String, String[]> logicalHeaders = getLogicalToActualHeaders();
+            for (String logical : logicalHeaders.keySet()) {
+                Integer idx = getHeaderIndex(headerMap, logicalHeaders.get(logical));
+                if (idx == null) {
+                    logger.error("Import file missing required column for '{}': tried {}", logical, Arrays.toString(logicalHeaders.get(logical)));
+                    throw new IllegalArgumentException("Import file missing required column for: " + logical);
                 }
             }
 
@@ -106,15 +143,16 @@ public class ImportService {
             while ((fields = csvReader.readNext()) != null) {
                 try {
                     BudgetTransaction tx = new BudgetTransaction(
-                            getField(fields, headerMap, "name"),
-                            getField(fields, headerMap, "amount"),
-                            getField(fields, headerMap, "category"),
-                            getField(fields, headerMap, "criticality"),
-                            getField(fields, headerMap, "transaction date"),
-                            getField(fields, headerMap, "account"),
-                            getField(fields, headerMap, "status"),
-                            getField(fields, headerMap, "created time"),
-                            getField(fields, headerMap, "payment method")
+                            getField(fields, headerMap, logicalHeaders.get("name")),
+                            getField(fields, headerMap, logicalHeaders.get("amount")),
+                            getField(fields, headerMap, logicalHeaders.get("category")),
+                            getField(fields, headerMap, logicalHeaders.get("criticality")),
+                            getField(fields, headerMap, logicalHeaders.get("transaction date")),
+                            getField(fields, headerMap, logicalHeaders.get("account")),
+                            getField(fields, headerMap, logicalHeaders.get("status")),
+                            getField(fields, headerMap, logicalHeaders.get("created time")),
+                            getField(fields, headerMap, logicalHeaders.get("payment method")), // <-- paymentMethod
+                            "" // <-- statementPeriod (empty by default on import)
                     );
                     transactions.add(tx);
                     logger.debug("Parsed transaction at line {}: {}", lineNum, tx);
@@ -134,7 +172,14 @@ public class ImportService {
             throw ex;
         }
     }
-
+    /**
+     * Imports transactions from the given import file into the working budget CSV,
+     * checking for duplicates using a hash of normalized fields.
+     * Always maps fields by header name, never by index.
+     * @param csvImportFile The import file.
+     * @param workingBudgetCsvPath The path to the working file.
+     * @return ImportResult summarizing detected/imported/duplicates/errors.
+     */
     public ImportResult importTransactions(File csvImportFile, String workingBudgetCsvPath) {
         logger.info("Entering importTransactions(): importFile='{}', workingFile='{}'",
                 csvImportFile != null ? csvImportFile.getAbsolutePath() : null,
@@ -158,7 +203,9 @@ public class ImportService {
 
         BudgetFileService budgetFileService = new BudgetFileService(workingBudgetCsvPath);
         Set<String> existingHashes = new HashSet<>();
-        // --- Read working file, using header mapping ---
+        Map<String, String[]> logicalHeaders = getLogicalToActualHeaders();
+
+        // --- Read working file, using robust header mapping ---
         try (
                 InputStreamReader reader = new InputStreamReader(new FileInputStream(workingBudgetCsvPath), StandardCharsets.UTF_8);
                 CSVReader csvReader = new CSVReader(reader)
@@ -173,12 +220,11 @@ public class ImportService {
                 headers[0] = headers[0].substring(1);
             }
             Map<String, Integer> headerMap = mapHeaderIndices(headers);
-
-            String[] required = {"name", "amount", "category", "criticality", "transaction date", "account", "status", "created time", "payment method"};
-            for (String req : required) {
-                if (!headerMap.containsKey(req)) {
-                    logger.error("Working file missing required column: {}", req);
-                    return new ImportResult(0, 0, 0, 1, List.of("Working file missing required column: " + req), importedLines);
+            for (String logical : logicalHeaders.keySet()) {
+                Integer idx = getHeaderIndex(headerMap, logicalHeaders.get(logical));
+                if (idx == null) {
+                    logger.error("Working file missing required column for '{}': tried {}", logical, Arrays.toString(logicalHeaders.get(logical)));
+                    return new ImportResult(0, 0, 0, 1, List.of("Working file missing required column for: " + logical), importedLines);
                 }
             }
 
@@ -186,15 +232,15 @@ public class ImportService {
             int readCount = 0;
             while ((fields = csvReader.readNext()) != null) {
                 String hash = computeNormalizedTransactionHash(
-                        getField(fields, headerMap, "name"),
-                        getField(fields, headerMap, "amount"),
-                        getField(fields, headerMap, "category"),
-                        getField(fields, headerMap, "criticality"),
-                        getField(fields, headerMap, "transaction date"),
-                        getField(fields, headerMap, "account"),
-                        getField(fields, headerMap, "status"),
-                        getField(fields, headerMap, "created time"),
-                        "" // always blank for statementPeriod/paymentMethod
+                        getField(fields, headerMap, logicalHeaders.get("name")),
+                        getField(fields, headerMap, logicalHeaders.get("amount")),
+                        getField(fields, headerMap, logicalHeaders.get("category")),
+                        getField(fields, headerMap, logicalHeaders.get("criticality")),
+                        getField(fields, headerMap, logicalHeaders.get("transaction date")),
+                        getField(fields, headerMap, logicalHeaders.get("account")),
+                        getField(fields, headerMap, logicalHeaders.get("status")),
+                        getField(fields, headerMap, logicalHeaders.get("created time")),
+                        getField(fields, headerMap, logicalHeaders.get("payment method"))
                 );
                 logger.debug("Existing row hash: fields='{}' -> hash={}", Arrays.toString(fields), hash);
                 existingHashes.add(hash);
@@ -206,7 +252,7 @@ public class ImportService {
             return new ImportResult(0, 0, 0, 1, List.of("Failed to load existing transactions: " + e.getMessage()), importedLines);
         }
 
-        // --- Read import file, using header mapping ---
+        // --- Read import file, using robust header mapping ---
         try (
                 InputStreamReader reader = new InputStreamReader(new FileInputStream(csvImportFile), StandardCharsets.UTF_8);
                 CSVReader csvReader = new CSVReader(reader)
@@ -221,12 +267,11 @@ public class ImportService {
                 headers[0] = headers[0].substring(1);
             }
             Map<String, Integer> headerMap = mapHeaderIndices(headers);
-
-            String[] required = {"name", "amount", "category", "criticality", "transaction date", "account", "status", "created time", "payment method"};
-            for (String req : required) {
-                if (!headerMap.containsKey(req)) {
-                    logger.error("Import file missing required column: {}", req);
-                    return new ImportResult(0, 0, 0, 1, List.of("Import file missing required column: " + req), importedLines);
+            for (String logical : logicalHeaders.keySet()) {
+                Integer idx = getHeaderIndex(headerMap, logicalHeaders.get(logical));
+                if (idx == null) {
+                    logger.error("Import file missing required column for '{}': tried {}", logical, Arrays.toString(logicalHeaders.get(logical)));
+                    return new ImportResult(0, 0, 0, 1, List.of("Import file missing required column for: " + logical), importedLines);
                 }
             }
 
@@ -236,15 +281,15 @@ public class ImportService {
                 detectedCount++;
                 try {
                     String hash = computeNormalizedTransactionHash(
-                            getField(fields, headerMap, "name"),
-                            getField(fields, headerMap, "amount"),
-                            getField(fields, headerMap, "category"),
-                            getField(fields, headerMap, "criticality"),
-                            getField(fields, headerMap, "transaction date"),
-                            getField(fields, headerMap, "account"),
-                            getField(fields, headerMap, "status"),
-                            getField(fields, headerMap, "created time"),
-                            "" // always blank for statementPeriod/paymentMethod
+                            getField(fields, headerMap, logicalHeaders.get("name")),
+                            getField(fields, headerMap, logicalHeaders.get("amount")),
+                            getField(fields, headerMap, logicalHeaders.get("category")),
+                            getField(fields, headerMap, logicalHeaders.get("criticality")),
+                            getField(fields, headerMap, logicalHeaders.get("transaction date")),
+                            getField(fields, headerMap, logicalHeaders.get("account")),
+                            getField(fields, headerMap, logicalHeaders.get("status")),
+                            getField(fields, headerMap, logicalHeaders.get("created time")),
+                            getField(fields, headerMap, logicalHeaders.get("payment method"))
                     );
                     logger.debug("Import row hash: fields='{}' -> hash={}", Arrays.toString(fields), hash);
 
@@ -256,15 +301,15 @@ public class ImportService {
                         continue;
                     }
                     BudgetTransaction tx = new BudgetTransaction(
-                            getField(fields, headerMap, "name"),
-                            getField(fields, headerMap, "amount"),
-                            getField(fields, headerMap, "category"),
-                            getField(fields, headerMap, "criticality"),
-                            getField(fields, headerMap, "transaction date"),
-                            getField(fields, headerMap, "account"),
-                            getField(fields, headerMap, "status"),
-                            getField(fields, headerMap, "created time"),
-                            "" // Always blank
+                            getField(fields, headerMap, logicalHeaders.get("name")),
+                            getField(fields, headerMap, logicalHeaders.get("amount")),
+                            getField(fields, headerMap, logicalHeaders.get("category")),
+                            getField(fields, headerMap, logicalHeaders.get("criticality")),
+                            getField(fields, headerMap, logicalHeaders.get("transaction date")),
+                            getField(fields, headerMap, logicalHeaders.get("account")),
+                            getField(fields, headerMap, logicalHeaders.get("status")),
+                            getField(fields, headerMap, logicalHeaders.get("created time")),
+                            getField(fields, headerMap, logicalHeaders.get("payment method"))
                     );
                     budgetFileService.add(tx);
                     existingHashes.add(hash);
@@ -328,7 +373,7 @@ public class ImportService {
     private static String normalizeDate(String dateStr) {
         if (dateStr == null) return "";
         dateStr = dateStr.trim();
-        List<String> patterns = Arrays.asList("MMMM d, yyyy", "MMM d, yyyy", "yyyy-MM-dd", "M/d/yyyy", "MMMM d yyyy");
+        List<String> patterns = Arrays.asList("MMMM d, yyyy", "MMM d, yyyy", "yyyy-MM-dd", "M/d/yyyy", "MMMM d yyyy", "MMMM d, yyyy h:mm a");
         for (String pattern : patterns) {
             try {
                 SimpleDateFormat in = new SimpleDateFormat(pattern, Locale.US);

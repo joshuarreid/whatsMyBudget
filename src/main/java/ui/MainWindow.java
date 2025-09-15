@@ -247,6 +247,7 @@ public class MainWindow extends JFrame {
             }
             int duplicateCount = 0;
             for (BudgetTransaction tx : importedTxs) {
+                logger.info("Checking imported transaction for duplication: {}", tx);
                 String hash = BudgetRowHashUtil.computeTransactionHash(
                         tx.getName(),
                         tx.getAmount(),

@@ -112,22 +112,50 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
         ensureCsvFileReady();
         List<BudgetRow> rows = new ArrayList<>();
         try (Reader reader = Files.newBufferedReader(Paths.get(filePath))) {
-            CSVReaderHeaderAware csvReader = new CSVReaderHeaderAware(reader);
-            Map<String, String> map;
-            while ((map = csvReader.readMap()) != null) {
-                BudgetRow budgetRow = BudgetRowConverter.mapToBudgetRow(map);
-                rows.add(budgetRow);
+            CSVReader csvReader = new CSVReader(reader);
+            String[] headers = csvReader.readNext();
+            if (headers == null) {
+                logger.warn("CSV file '{}' is empty, no headers found.", filePath);
+                return rows;
+            }
+            // Remove BOM if present
+            if (headers.length > 0 && headers[0] != null && headers[0].startsWith("\uFEFF")) {
+                headers[0] = headers[0].substring(1);
+            }
+            int headerCount = headers.length;
+            logger.info("CSV headers: {}", Arrays.toString(headers));
+            String[] line;
+            int lineNum = 1;
+            while ((line = csvReader.readNext()) != null) {
+                lineNum++;
+                // Skip blank/empty lines
+                if (line.length == 1 && (line[0] == null || line[0].trim().isEmpty())) {
+                    logger.debug("Skipping blank line {}.", lineNum);
+                    continue;
+                }
+                if (line.length != headerCount) {
+                    logger.warn("Line {}: Expected {} columns but found {}. Skipping line. Content: {}", lineNum, headerCount, line.length, Arrays.toString(line));
+                    continue;
+                }
+                Map<String, String> map = new LinkedHashMap<>();
+                for (int i = 0; i < headerCount; i++) {
+                    map.put(headers[i], line[i]);
+                }
+                logger.debug("Creating BudgetRow from map at line {}: {}", lineNum, map);
+                try {
+                    rows.add(BudgetRowConverter.mapToBudgetRow(map));
+                } catch (Exception ex) {
+                    logger.error("Failed to create BudgetRow at line {}: {}. Error: {}", lineNum, map, ex.getMessage());
+                }
             }
             logger.info("Read {} rows from CSV file '{}'", rows.size(), filePath);
         } catch (IOException e) {
-            logger.error("Failed to read CSV file '{}': {}", filePath, e.getMessage());
+            logger.error("Failed to read CSV file '{}': {}", filePath, e.getMessage(), e);
         } catch (CsvValidationException e) {
-            logger.error("CSV validation exception while reading '{}': {}", filePath, e.getMessage());
             throw new RuntimeException(e);
         }
         return rows;
     }
-
     /**
      * Adds a BudgetRow to the CSV file.
      * @param transaction The BudgetRow to add.

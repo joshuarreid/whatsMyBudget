@@ -368,6 +368,14 @@ public class CSVStateService {
      * @param row BudgetRow to convert
      * @return BudgetTransaction
      */
+    /**
+     * Converts a BudgetRow to a BudgetTransaction.
+     * Ensures statementPeriod is never null to avoid IllegalArgumentException.
+     * For transactions from files without a statementPeriod column, uses an empty string.
+     * Logs all conversions and any fallback behavior.
+     * @param row BudgetRow to convert
+     * @return BudgetTransaction
+     */
     private BudgetTransaction convertToTransaction(BudgetRow row) {
         logger.info("Converting BudgetRow to BudgetTransaction: {}", row);
         String statementPeriod = null;
@@ -376,9 +384,9 @@ public class CSVStateService {
         }
         // Defensive: If null, set to empty string (never pass null to constructor)
         if (statementPeriod == null) {
-            logger.warn("Statement period is null in BudgetRow: {}. Using empty string ('') for compatibility.", row);
             statementPeriod = "";
         }
+        // Always pass paymentMethod from BudgetRow
         BudgetTransaction tx = new BudgetTransaction(
                 row.getName(),
                 row.getAmount(),
@@ -388,6 +396,7 @@ public class CSVStateService {
                 row.getAccount(),
                 row.getStatus(),
                 row.getCreatedTime(),
+                row.getPaymentMethod(),
                 statementPeriod
         );
         logger.info("Converted row: {}", tx);

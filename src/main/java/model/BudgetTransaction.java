@@ -20,9 +20,8 @@ public class BudgetTransaction extends BudgetRow {
     private final LocalDate parsedTransactionDate;
     private boolean isDuplicate;
 
-
     /**
-     * Constructs a BudgetTransaction with all required fields, including statementPeriod and parses the date.
+     * Constructs a BudgetTransaction with all required fields, including statementPeriod, paymentMethod, and parses the date.
      *
      * @param name             Transaction name/description
      * @param amount           Transaction amount (e.g., "$10.00")
@@ -32,14 +31,14 @@ public class BudgetTransaction extends BudgetRow {
      * @param account          Account used ("Josh", "Anna", "Joint", etc.)
      * @param status           Status (empty or custom)
      * @param createdTime      Time the entry was created
+     * @param paymentMethod    Payment method string (may be blank)
      * @param statementPeriod  The associated statement period (must not be null)
      */
     public BudgetTransaction(String name, String amount, String category, String criticality, String transactionDate,
-                             String account, String status, String createdTime, String statementPeriod) {
-        super(name, amount, category, criticality, transactionDate, account, status, createdTime);
-        logger.debug("BudgetTransaction constructor called with "
-                        + "name={}, amount={}, category={}, criticality={}, transactionDate={}, account={}, status={}, createdTime={}, statementPeriod={}",
-                name, amount, category, criticality, transactionDate, account, status, createdTime, statementPeriod);
+                             String account, String status, String createdTime, String paymentMethod, String statementPeriod) {
+        super(name, amount, category, criticality, transactionDate, account, status, createdTime, paymentMethod);
+        logger.debug("BudgetTransaction constructor called with name={}, amount={}, category={}, criticality={}, transactionDate={}, account={}, status={}, createdTime={}, paymentMethod={}, statementPeriod={}",
+                name, amount, category, criticality, transactionDate, account, status, createdTime, paymentMethod, statementPeriod);
 
         if (statementPeriod == null) {
             logger.error("Attempted to create BudgetTransaction with null statementPeriod");
@@ -62,7 +61,15 @@ public class BudgetTransaction extends BudgetRow {
             logger.warn("transactionDate is null or empty for transaction '{}'", name);
         }
         this.parsedTransactionDate = parsedDate;
-        logger.debug("BudgetTransaction successfully created with statementPeriod={} and parsedTransactionDate={}", statementPeriod, parsedTransactionDate);
+        logger.debug("BudgetTransaction successfully created with statementPeriod={}, paymentMethod={}, parsedTransactionDate={}", statementPeriod, paymentMethod, parsedTransactionDate);
+    }
+
+    /**
+     * Legacy constructor for backward compatibility (no paymentMethod).
+     */
+    public BudgetTransaction(String name, String amount, String category, String criticality, String transactionDate,
+                             String account, String status, String createdTime, String statementPeriod) {
+        this(name, amount, category, criticality, transactionDate, account, status, createdTime, null, statementPeriod);
     }
 
     /**
@@ -117,7 +124,6 @@ public class BudgetTransaction extends BudgetRow {
         }
     }
 
-
     public boolean isDuplicate() {
         return isDuplicate;
     }
@@ -138,6 +144,7 @@ public class BudgetTransaction extends BudgetRow {
                 ", account='" + getAccount() + '\'' +
                 ", status='" + getStatus() + '\'' +
                 ", createdTime='" + getCreatedTime() + '\'' +
+                ", paymentMethod='" + getPaymentMethod() + '\'' +
                 ", statementPeriod='" + statementPeriod + '\'' +
                 ", parsedTransactionDate=" + parsedTransactionDate +
                 '}';
