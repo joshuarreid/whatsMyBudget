@@ -4,10 +4,13 @@ import model.BudgetTransaction;
 import org.slf4j.Logger;
 import service.CSVStateService;
 import util.AppLogger;
+import util.PaymentSummaryExporter;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.io.File;
 import java.util.List;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -47,6 +50,7 @@ public class PaymentDialog extends JDialog {
 
     /**
      * Builds the UI: PaymentSummaryPanel at top, dynamic breakdown panels below.
+     * Adds an Export button to generate the payment summary CSV.
      */
     private void buildUI() {
         logger.info("Building PaymentDialog UI.");
@@ -56,10 +60,20 @@ public class PaymentDialog extends JDialog {
         summaryPanel = new PaymentSummaryPanel();
         JPanel summaryWrapper = new JPanel(new BorderLayout());
         summaryWrapper.setBorder(new EmptyBorder(10, 10, 10, 10));
-
-        // Set a fixed preferred height for the summary table
         summaryPanel.setPreferredSize(new Dimension(Short.MAX_VALUE, 110));
         summaryWrapper.add(summaryPanel, BorderLayout.CENTER);
+
+        // Add export button to the top right
+        JButton exportButton = new JButton("Export...");
+        exportButton.setToolTipText("Export payment summary as CSV");
+        exportButton.addActionListener(this::handleExportClicked);
+
+        // Button panel for alignment
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        buttonPanel.add(exportButton);
+        buttonPanel.setOpaque(false);
+        summaryWrapper.add(buttonPanel, BorderLayout.EAST);
+
         add(summaryWrapper, BorderLayout.NORTH);
 
         // The panel that will hold the dynamic breakdown panels
@@ -67,12 +81,57 @@ public class PaymentDialog extends JDialog {
         breakdownPanel.setLayout(new BoxLayout(breakdownPanel, BoxLayout.Y_AXIS));
         JScrollPane breakdownScroll = new JScrollPane(breakdownPanel);
         breakdownScroll.setBorder(new EmptyBorder(10, 10, 10, 10));
-        // Expand breakdown area to fill remaining space
         breakdownScroll.setPreferredSize(new Dimension(Short.MAX_VALUE, 450));
         add(breakdownScroll, BorderLayout.CENTER);
 
         // Load and display all data
         loadAndDisplayPaymentSummary();
+    }
+
+    /**
+     * Handles the Export button click. Prompts user for a file and exports payment summary as CSV.
+     */
+    private void handleExportClicked(ActionEvent event) {
+        logger.info("Export button clicked in PaymentDialog.");
+        List<BudgetTransaction> transactions;
+        try {
+            transactions = csvStateService.getCurrentTransactions();
+            logger.info("Fetched {} transactions for export.", transactions.size());
+        } catch (Exception ex) {
+            logger.error("Failed to fetch transactions for export: {}", ex.getMessage(), ex);
+            JOptionPane.showMessageDialog(this, "Failed to fetch transactions for export:\n" + ex.getMessage(),
+                    "Export Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        if (transactions == null || transactions.isEmpty()) {
+            logger.warn("No transactions to export. Export aborted.");
+            JOptionPane.showMessageDialog(this, "No transactions available to export.", "Export Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Save Payment Summary CSV");
+        fileChooser.setSelectedFile(new File("PaymentSummary.csv"));
+        int userSelection = fileChooser.showSaveDialog(this);
+        if (userSelection != JFileChooser.APPROVE_OPTION) {
+            logger.info("Export file dialog cancelled by user.");
+            return;
+        }
+
+        File exportFile = fileChooser.getSelectedFile();
+        logger.info("User selected file for export: '{}'", exportFile.getAbsolutePath());
+
+        try {
+            PaymentSummaryExporter.exportPaymentSummaryToCSV(transactions, exportFile);
+            logger.info("Exported payment summary to '{}'", exportFile.getAbsolutePath());
+            JOptionPane.showMessageDialog(this, "Payment summary exported successfully to:\n" + exportFile.getAbsolutePath(),
+                    "Export Successful", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            logger.error("Failed to export payment summary CSV: {}", ex.getMessage(), ex);
+            JOptionPane.showMessageDialog(this, "Failed to export payment summary:\n" + ex.getMessage(),
+                    "Export Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**
