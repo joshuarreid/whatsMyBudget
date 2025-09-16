@@ -19,7 +19,7 @@ import java.util.Set;
 
 /**
  * Main window for the Statement-Based Budgeting app.
- * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions and exiting.
+ * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions, making payments, and exiting.
  *
  * Spring @Autowired is used for all service dependencies.
  * Only runtime parameters (lastView, firstLaunch) are passed in the constructor.
@@ -143,7 +143,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Creates a menu bar with File > Import Transactions, Manage Projected Expenses, Exit.
+     * Creates a menu bar with File > Import Transactions, Make Payment, Manage Projected Expenses, Exit.
      */
     private JMenuBar createMenuBar() {
         logger.info("Creating menu bar.");
@@ -155,6 +155,13 @@ public class MainWindow extends JFrame {
         importItem.addActionListener(e -> {
             logger.info("User selected Import Transactions from menu.");
             handleImportTransactions();
+        });
+
+        // NEW: Make Payment menu item
+        JMenuItem makePaymentItem = new JMenuItem("Make Payment");
+        makePaymentItem.addActionListener(e -> {
+            logger.info("User selected Make Payment from menu.");
+            handleMakePayment();
         });
 
         JMenuItem manageProjectedItem = new JMenuItem("Manage Projected Expenses");
@@ -170,6 +177,7 @@ public class MainWindow extends JFrame {
         });
 
         fileMenu.add(importItem);
+        fileMenu.add(makePaymentItem); // Inserted here in order
         fileMenu.add(manageProjectedItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
@@ -177,6 +185,27 @@ public class MainWindow extends JFrame {
 
         logger.info("Menu bar created.");
         return menuBar;
+    }
+
+    /**
+     * Handles the Make Payment dialog launch.
+     * Opens PaymentDialog using the current CSVStateService.
+     */
+    private void handleMakePayment() {
+        logger.info("Opening PaymentDialog from MainWindow.");
+        if (csvStateService == null) {
+            logger.error("CSVStateService is null in handleMakePayment.");
+            JOptionPane.showMessageDialog(this, "Application error: Cannot load payment data.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        try {
+            PaymentDialog dialog = new PaymentDialog(this, csvStateService);
+            dialog.setVisible(true);
+            logger.info("PaymentDialog opened and closed.");
+        } catch (Exception e) {
+            logger.error("Failed to open PaymentDialog: {}", e.getMessage(), e);
+            JOptionPane.showMessageDialog(this, "Failed to open Make Payment dialog: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**
