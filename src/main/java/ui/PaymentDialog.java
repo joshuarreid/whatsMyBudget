@@ -191,9 +191,11 @@ public class PaymentDialog extends JDialog {
 
             CategorySummaryPanel joshPanel = new CategorySummaryPanel("Josh", null);
             joshPanel.setTransactions(joshTx);
+            joshPanel.setCategoryRowClickListener(category -> showTransactionsForCategory(category, "Josh", card, joshTx));
 
             CategorySummaryPanel annaPanel = new CategorySummaryPanel("Anna", null);
             annaPanel.setTransactions(annaTx);
+            annaPanel.setCategoryRowClickListener(category -> showTransactionsForCategory(category, "Anna", card, annaTx));
 
             sideBySide.add(wrapWithLabel(joshPanel, "Josh"));
             sideBySide.add(wrapWithLabel(annaPanel, "Anna"));
@@ -207,6 +209,7 @@ public class PaymentDialog extends JDialog {
     /**
      * Builds the list of transactions for the category panel for a given person/card,
      * including all their own transactions at full value and all joint transactions at half value.
+     * Adds [Joint Split] to the name ONLY for split joint transactions.
      *
      * @param allTx List of all transactions
      * @param person "Josh" or "Anna"
@@ -215,29 +218,28 @@ public class PaymentDialog extends JDialog {
      */
     private List<BudgetTransaction> buildSplitTransactions(List<BudgetTransaction> allTx, String person, String card) {
         logger.debug("buildSplitTransactions for person='{}', card='{}'", person, card);
-        List<BudgetTransaction> result = new java.util.ArrayList<>();
+        List<BudgetTransaction> result = new ArrayList<>();
 
-        // All transactions for this person and card (full value)
+        // All transactions for this person and card (full value, original name)
         allTx.stream()
                 .filter(tx -> person.equalsIgnoreCase(tx.getAccount()))
                 .filter(tx -> card.equalsIgnoreCase(tx.getPaymentMethod()))
                 .forEach(result::add);
 
-        // All joint transactions for this card (half value, clone and adjust amount)
+        // All joint transactions for this card (half value, annotate as split)
         allTx.stream()
                 .filter(tx -> "Joint".equalsIgnoreCase(tx.getAccount()))
                 .filter(tx -> card.equalsIgnoreCase(tx.getPaymentMethod()))
                 .forEach(jointTx -> {
                     try {
                         double half = jointTx.getAmountValue() / 2.0;
-                        // Defensive: clone and set account to this person, optionally annotate category
                         BudgetTransaction splitTx = new BudgetTransaction(
-                                jointTx.getName(),
+                                jointTx.getName() + " [Joint Split]",
                                 String.format("%.2f", half),
-                                jointTx.getCategory(), // optionally: + " (Joint Split)"
+                                jointTx.getCategory(),
                                 jointTx.getCriticality(),
                                 jointTx.getTransactionDate(),
-                                person, // Set to Anna or Josh for correct panel filtering
+                                person,
                                 jointTx.getStatus(),
                                 jointTx.getCreatedTime(),
                                 jointTx.getPaymentMethod(),
@@ -253,6 +255,64 @@ public class PaymentDialog extends JDialog {
     }
 
     /**
+     * Handles subcategory row clicks for a given CategorySummaryPanel in PaymentDialog.
+     * Only marks [Joint Split] if the transaction was created as a split.
+     *
+     * @param category The category that was clicked.
+     * @param person   "Josh" or "Anna"
+     * @param card     Card/payment method.
+     * @param panelTxs The transactions shown in the category panel (split/filtered).
+     */
+    private void showTransactionsForCategory(String category, String person, String card, List<BudgetTransaction> panelTxs) {
+        logger.info("showTransactionsForCategory called: category='{}', person='{}', card='{}'", category, person, card);
+        if (panelTxs == null || panelTxs.isEmpty()) {
+            logger.warn("No transactions to display for category '{}', person '{}', card '{}'.", category, person, card);
+            JOptionPane.showMessageDialog(this, "No transactions found for this category.", "No Transactions", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // Filter for this category only; display names as stored (annotation is already present if split)
+        List<BudgetTransaction> txsForCategory = panelTxs.stream()
+                .filter(tx -> {
+                    String cat = tx.getCategory() == null ? "(Uncategorized)" : tx.getCategory();
+                    return cat.equals(category);
+                })
+                .collect(Collectors.toList());
+
+        logger.info("Found {} transaction(s) for category '{}', person '{}', card '{}'.", txsForCategory.size(), category, person, card);
+
+        if (txsForCategory.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No transactions found for this category.", "No Transactions", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        String[] columns = {"Date", "Name", "Amount", "Category", "Criticality", "Account"};
+        GenericTablePanel txPanel = new GenericTablePanel(
+                columns,
+                tx -> new Object[]{
+                        tx.getDate() != null ? tx.getDate().toString() : "",
+                        tx.getName(),
+                        formatAmount(tx.getAmount()),
+                        tx.getCategory(),
+                        tx.getCriticality(),
+                        tx.getAccount()
+                });
+
+        txPanel.setTransactions(txsForCategory);
+
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this),
+                String.format("%s - %s - %s Transactions", card, person, category),
+                Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.getContentPane().add(txPanel, BorderLayout.CENTER);
+        dialog.setSize(700, 300);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+
+        logger.info("Displayed transaction dialog for category '{}', person '{}', card '{}'", category, person, card);
+    }
+
+    /**
      * Utility to wrap a panel with a titled border label for clarity.
      */
     private JPanel wrapWithLabel(JPanel inner, String label) {
@@ -264,5 +324,21 @@ public class PaymentDialog extends JDialog {
         wrapper.add(inner, BorderLayout.CENTER);
         wrapper.setBorder(new EmptyBorder(0, 2, 0, 2));
         return wrapper;
+    }
+
+    /**
+     * Formats amount for display in the table.
+     * @param amount String amount with/without $.
+     * @return Standardized display format.
+     */
+    private static String formatAmount(String amount) {
+        if (amount == null) return "$0.00";
+        String amt = amount.trim().replace("$", "");
+        try {
+            double d = Double.parseDouble(amt);
+            return String.format("$%.2f", d);
+        } catch (Exception e) {
+            return amount;
+        }
     }
 }
