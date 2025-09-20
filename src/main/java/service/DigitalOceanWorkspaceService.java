@@ -29,7 +29,8 @@ public class DigitalOceanWorkspaceService {
     private final String bucket;
     private final AmazonS3 s3;
 
-    private static final String CLOUD_BACKUP_PREFIX = "cloud/workspace_";
+    private static final String CLOUD_BACKUP_DIR = "whatsMyBudget/cloud/";
+    private static final String CLOUD_BACKUP_PREFIX = CLOUD_BACKUP_DIR + "workspace_";
     private static final String CLOUD_BACKUP_SUFFIX = ".json";
     private static final DateTimeFormatter FILENAME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss'Z'").withZone(ZoneOffset.UTC);
 
@@ -71,7 +72,7 @@ public class DigitalOceanWorkspaceService {
     }
 
     /**
-     * Saves a new versioned backup to /cloud, and deletes any backups older than 30 days.
+     * Saves a new versioned backup to /whatsMyBudget/cloud, and deletes any backups older than 30 days.
      * @param workspace WorkspaceDTO to back up.
      * @throws IOException if upload fails
      */
@@ -125,12 +126,12 @@ public class DigitalOceanWorkspaceService {
     }
 
     /**
-     * Deletes any backup in /cloud/ older than 30 days.
+     * Deletes any backup in /whatsMyBudget/cloud/ older than 30 days.
      */
     public void cleanOldCloudBackups() {
-        logger.info("Scanning /cloud/ for backups older than 30 days to delete...");
+        logger.info("Scanning /whatsMyBudget/cloud/ for backups older than 30 days to delete...");
         try {
-            ObjectListing listing = s3.listObjects(bucket, "cloud/");
+            ObjectListing listing = s3.listObjects(bucket, CLOUD_BACKUP_DIR);
             List<S3ObjectSummary> toDelete = new ArrayList<>();
             Instant cutoff = Instant.now().minusSeconds(30L * 24 * 60 * 60);
 
@@ -163,7 +164,7 @@ public class DigitalOceanWorkspaceService {
             }
             logger.info("Old backup cleanup complete. {} files deleted.", toDelete.size());
         } catch (AmazonServiceException e) {
-            logger.error("Failed to list or delete old backups in /cloud/: {}", e.getMessage(), e);
+            logger.error("Failed to list or delete old backups in /whatsMyBudget/cloud/: {}", e.getMessage(), e);
         }
     }
 
@@ -172,9 +173,9 @@ public class DigitalOceanWorkspaceService {
      * @return Validated WorkspaceDTO, or null if not found or validation fails.
      */
     public WorkspaceDTO downloadLatestWorkspaceBackup() {
-        logger.info("Downloading the latest WorkspaceDTO backup from /cloud/...");
+        logger.info("Downloading the latest WorkspaceDTO backup from /whatsMyBudget/cloud/...");
         try {
-            ObjectListing listing = s3.listObjects(bucket, "cloud/");
+            ObjectListing listing = s3.listObjects(bucket, CLOUD_BACKUP_DIR);
             S3ObjectSummary newest = null;
             Instant newestInstant = Instant.EPOCH;
             for (S3ObjectSummary summary : listing.getObjectSummaries()) {
@@ -192,7 +193,7 @@ public class DigitalOceanWorkspaceService {
                 }
             }
             if (newest == null) {
-                logger.warn("No backups found in /cloud/.");
+                logger.warn("No backups found in /whatsMyBudget/cloud/.");
                 return null;
             }
             logger.info("Latest backup found: '{}'", newest.getKey());
@@ -224,20 +225,20 @@ public class DigitalOceanWorkspaceService {
      */
     public boolean validateConnection() {
         logger.info("Entering validateConnection() in DigitalOceanWorkspaceService.");
-        logger.info("Validating DigitalOcean Spaces connection: endpoint='{}', bucket='{}'", spacesEndpoint, bucket);
+        logger.info("Validating DigitalOcean Spaces connection: endpoint='{}', bucket='{}', prefix='{}'", spacesEndpoint, bucket, CLOUD_BACKUP_DIR);
         try {
             // Attempt to list objects with a minimal prefix to verify bucket access and credentials.
             ListObjectsRequest request = new ListObjectsRequest()
                     .withBucketName(bucket)
-                    .withPrefix("cloud/") // Minimal scope, adjust as needed
+                    .withPrefix(CLOUD_BACKUP_DIR) // Minimal scope, adjust as needed
                     .withMaxKeys(1);
             ObjectListing listing = s3.listObjects(request);
 
             if (listing != null) {
-                logger.info("Successfully connected to DigitalOcean Spaces bucket '{}'. At least one object listing succeeded.", bucket);
+                logger.info("Successfully connected to DigitalOcean Spaces bucket '{}' with prefix '{}'. At least one object listing succeeded.", bucket, CLOUD_BACKUP_DIR);
                 return true;
             } else {
-                logger.error("Received null response when listing objects from bucket '{}'.", bucket);
+                logger.error("Received null response when listing objects from bucket '{}', prefix '{}'.", bucket, CLOUD_BACKUP_DIR);
                 return false;
             }
         } catch (AmazonServiceException e) {

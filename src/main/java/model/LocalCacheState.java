@@ -7,8 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Stores all workspace-local cache/config data for backup and sync.
@@ -17,7 +16,6 @@ import java.util.Map;
  */
 @Getter
 @Setter
-@NoArgsConstructor
 public class LocalCacheState implements Serializable {
     private static final Logger logger = LoggerFactory.getLogger(LocalCacheState.class);
 
@@ -31,22 +29,50 @@ public class LocalCacheState implements Serializable {
     private String currentStatementPeriod;
 
     /** List of recent budget files for quick access */
-    private List<String> recentBudgetFiles;
+    private List<String> recentBudgetFiles = new ArrayList<>();
 
     /** List of recent projections files */
-    private List<String> recentProjectedFiles;
+    private List<String> recentProjectedFiles = new ArrayList<>();
 
     /** List of all known statement periods (used for dropdowns, navigation, etc.) */
-    private List<String> statementPeriods;
+    private List<String> statementPeriods = new ArrayList<>();
 
     /** Mapping of statement period -> archived file name (for fast lookup) */
-    private Map<String, String> statementPeriodToFileMap;
+    private Map<String, String> statementPeriodToFileMap = new HashMap<>();
 
     /** Other app config as a generic map (future extensibility) */
-    private Map<String, String> appConfig;
+    private Map<String, String> appConfig = new HashMap<>();
 
     /** For migration/versioning */
     private String version;
+
+    /**
+     * Default constructor ensures all collections are non-null.
+     */
+    public LocalCacheState() {
+        logger.info("Constructing LocalCacheState and initializing collections if null.");
+        if (recentBudgetFiles == null) {
+            logger.warn("recentBudgetFiles was null in constructor. Initializing as empty list.");
+            recentBudgetFiles = new ArrayList<>();
+        }
+        if (recentProjectedFiles == null) {
+            logger.warn("recentProjectedFiles was null in constructor. Initializing as empty list.");
+            recentProjectedFiles = new ArrayList<>();
+        }
+        if (statementPeriods == null) {
+            logger.warn("statementPeriods was null in constructor. Initializing as empty list.");
+            statementPeriods = new ArrayList<>();
+        }
+        if (statementPeriodToFileMap == null) {
+            logger.warn("statementPeriodToFileMap was null in constructor. Initializing as empty map.");
+            statementPeriodToFileMap = new HashMap<>();
+        }
+        if (appConfig == null) {
+            logger.warn("appConfig was null in constructor. Initializing as empty map.");
+            appConfig = new HashMap<>();
+        }
+        logger.info("LocalCacheState constructed with non-null collections.");
+    }
 
     /**
      * Validates this LocalCacheState instance for general app use.
@@ -111,7 +137,6 @@ public class LocalCacheState implements Serializable {
             logger.error("Backup validation failed: currentStatementPeriod is required.");
             valid = false;
         }
-        // For backup, recent files and version are also critical
         if (recentBudgetFiles == null || recentBudgetFiles.isEmpty()) {
             logger.error("Backup validation failed: recentBudgetFiles is missing or empty.");
             valid = false;
