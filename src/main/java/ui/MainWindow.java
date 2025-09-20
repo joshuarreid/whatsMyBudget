@@ -18,7 +18,7 @@ import java.util.Set;
 
 /**
  * Main window for the Statement-Based Budgeting app.
- * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions, making payments, cloud save/sync, managing projected expenses, and exiting.
+ * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions, making payments, Save/sync, managing projected expenses, and exiting.
  *
  * Spring @Autowired is used for all service dependencies.
  * Only runtime parameters (lastView, firstLaunch) are passed in the constructor.
@@ -142,7 +142,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Creates a menu bar with File > Import Transactions, Make Payment, Cloud Save, Cloud Sync, Manage Projected Expenses, Exit.
+     * Creates a menu bar with File > Import Transactions, Make Payment, Save, Restore, Manage Projected Expenses, Exit.
      */
     private JMenuBar createMenuBar() {
         logger.info("Creating menu bar.");
@@ -162,15 +162,15 @@ public class MainWindow extends JFrame {
             handleMakePayment();
         });
 
-        JMenuItem syncToCloudItem = new JMenuItem("Cloud Save");
+        JMenuItem syncToCloudItem = new JMenuItem("Save");
         syncToCloudItem.addActionListener(e -> {
-            logger.info("User selected Cloud Save from menu.");
+            logger.info("User selected Save from menu.");
             handleSyncToCloud();
         });
 
-        JMenuItem updateFromCloudItem = new JMenuItem("Cloud Sync");
+        JMenuItem updateFromCloudItem = new JMenuItem("Restore");
         updateFromCloudItem.addActionListener(e -> {
-            logger.info("User selected Cloud Sync from menu.");
+            logger.info("User selected Restore from menu.");
             handleUpdateFromCloud();
         });
 
@@ -200,7 +200,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Handles the Cloud Sync workflow.
+     * Handles the Restore workflow.
      * - Confirms user intent before restore.
      * - Locks UI and shows progress dialog.
      * - Backs up local state before restore.
@@ -209,10 +209,10 @@ public class MainWindow extends JFrame {
      * - Ensures no file path or file name changes occur.
      */
     private void handleUpdateFromCloud() {
-        logger.info("Starting Cloud Sync workflow from MainWindow.");
+        logger.info("Starting Restore workflow from MainWindow.");
         if (csvStateService == null) {
             logger.error("CSVStateService is null in handleUpdateFromCloud.");
-            JOptionPane.showMessageDialog(this, "Application error: Cloud sync service unavailable.", "Cloud Restore Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Application error: Restore service unavailable.", "Restore Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -226,7 +226,7 @@ public class MainWindow extends JFrame {
                 JOptionPane.WARNING_MESSAGE
         );
         if (confirm != JOptionPane.YES_OPTION) {
-            logger.info("User cancelled Cloud Sync operation.");
+            logger.info("User cancelled Restore operation.");
             return;
         }
 
@@ -241,18 +241,18 @@ public class MainWindow extends JFrame {
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() {
-                logger.info("UI locked and progress dialog shown for cloud restore.");
+                logger.info("UI locked and progress dialog shown for Restore.");
                 try {
                     // The following method must not change file paths or user file locations.
                     csvStateService.cloudSync();
-                    logger.info("Cloud restore completed successfully (no exception thrown). File paths remain unchanged.");
+                    logger.info("Restore completed successfully (no exception thrown). File paths remain unchanged.");
                 } catch (Exception ex) {
-                    logger.error("Cloud restore failed during cloudSync(): {}", ex.getMessage(), ex);
+                    logger.error("Restore failed during cloudSync(): {}", ex.getMessage(), ex);
                     SwingUtilities.invokeLater(() ->
                             JOptionPane.showMessageDialog(
                                     MainWindow.this,
-                                    "Cloud restore failed:\n" + ex.getMessage(),
-                                    "Cloud Restore Error",
+                                    "Restore failed:\n" + ex.getMessage(),
+                                    "Restore Error",
                                     JOptionPane.ERROR_MESSAGE
                             )
                     );
@@ -263,9 +263,9 @@ public class MainWindow extends JFrame {
             @Override
             protected void done() {
                 progressDialog.dispose();
-                logger.info("Progress dialog closed after cloud restore.");
+                logger.info("Progress dialog closed after Restore.");
                 reloadAndRefreshAllPanels();
-                logger.info("All UI panels refreshed after Cloud Sync.");
+                logger.info("All UI panels refreshed after Restore.");
             }
         };
 
@@ -275,20 +275,20 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Handles the Cloud Save workflow.
+     * Handles the Save workflow.
      * Invokes CSVStateService.backupToCloud(), logs all actions, and notifies user of the result.
      */
     private void handleSyncToCloud() {
-        logger.info("Starting Cloud Save workflow from MainWindow.");
+        logger.info("Starting Save workflow from MainWindow.");
         if (csvStateService == null) {
             logger.error("CSVStateService is null in handleSyncToCloud.");
-            JOptionPane.showMessageDialog(this, "Application error: Cloud sync service unavailable.", "Sync Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Application error: Restore service unavailable.", "Sync Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
         try {
             csvStateService.backupToCloud();
             logger.info("Cloud backup completed successfully.");
-            JOptionPane.showMessageDialog(this, "Cloud backup completed successfully.", "Cloud Save", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Cloud backup completed successfully.", "Save", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             logger.error("Cloud backup failed: {}", e.getMessage(), e);
             JOptionPane.showMessageDialog(this, "Cloud backup failed:\n" + e.getMessage(), "Sync Error", JOptionPane.ERROR_MESSAGE);

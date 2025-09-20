@@ -70,23 +70,23 @@ public class Main {
 
             // --- CLOUD VALIDATION SECTION ---
             CSVStateService csvStateService = context.getBean(CSVStateService.class);
-            logger.info("Validating DigitalOcean cloud sync service before launching UI.");
+            logger.info("Validating DigitalOcean Cloud Restore service before launching UI.");
             try {
                 if (!csvStateService.validateCloudConnection()) {
-                    logger.error("DigitalOcean cloud sync service failed validation. Cloud features will be unavailable.");
+                    logger.error("DigitalOcean Cloud Restore service failed validation. Cloud features will be unavailable.");
                     JOptionPane.showMessageDialog(null,
-                            "Cloud sync is not configured correctly or cannot connect to DigitalOcean.\n" +
-                                    "Please check your cloud sync settings before using backup/sync features.",
-                            "Cloud Sync Not Configured", JOptionPane.ERROR_MESSAGE);
+                            "Cloud Restore is not configured correctly or cannot connect to DigitalOcean.\n" +
+                                    "Please check your Cloud Restore settings before using backup/sync features.",
+                            "Cloud Restore Not Configured", JOptionPane.ERROR_MESSAGE);
                     // Optionally: System.exit(2);
                 } else {
-                    logger.info("DigitalOcean cloud sync service validated successfully.");
+                    logger.info("DigitalOcean Cloud Restore service validated successfully.");
                 }
             } catch (Exception e) {
-                logger.error("Exception during DigitalOcean cloud sync validation: {}", e.getMessage(), e);
+                logger.error("Exception during DigitalOcean Cloud Restore validation: {}", e.getMessage(), e);
                 JOptionPane.showMessageDialog(null,
-                        "An error occurred while validating cloud sync:\n" + e.getMessage(),
-                        "Cloud Sync Error", JOptionPane.ERROR_MESSAGE);
+                        "An error occurred while validating Cloud Restore:\n" + e.getMessage(),
+                        "Cloud Restore Error", JOptionPane.ERROR_MESSAGE);
                 // Optionally: System.exit(3);
             }
             // --- END CLOUD VALIDATION SECTION ---
