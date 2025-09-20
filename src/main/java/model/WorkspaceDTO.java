@@ -2,6 +2,7 @@ package model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -48,6 +49,7 @@ public class WorkspaceDTO implements Serializable {
         if (obj == null) return null;
         try {
             ObjectMapper om = new ObjectMapper();
+            om.registerModule(new JavaTimeModule());
             String json = om.writeValueAsString(obj);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(json.getBytes(StandardCharsets.UTF_8));

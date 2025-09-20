@@ -29,17 +29,24 @@ import java.util.stream.Collectors;
 public class CSVStateService {
     private static final Logger logger = AppLogger.getLogger(CSVStateService.class);
 
-    @Autowired
-    private BudgetFileService budgetFileService; // For current statement's transactions
+    private final BudgetFileService budgetFileService;
+    private final ProjectedFileService projectedFileService;
+    private final LocalCacheService localCacheService;
+    private final DigitalOceanWorkspaceService digitalOceanWorkspaceService;
 
-    @Autowired
-    private ProjectedFileService projectedFileService; // For projected/future transactions
-
-    @Autowired
-    private LocalCacheService localCacheService; // For config, statement period, last-open files
-
-    @Autowired(required = false)
-    private DigitalOceanWorkspaceService digitalOceanWorkspaceService; // For cloud sync (optional for tests)
+    public CSVStateService(
+            BudgetFileService budgetFileService,
+            ProjectedFileService projectedFileService,
+            LocalCacheService localCacheService,
+            DigitalOceanWorkspaceService digitalOceanWorkspaceService
+    ) {
+        logger.info("Initializing CSVStateService with provided dependencies.");
+        this.budgetFileService = budgetFileService;
+        this.projectedFileService = projectedFileService;
+        this.localCacheService = localCacheService;
+        this.digitalOceanWorkspaceService = digitalOceanWorkspaceService;
+        logger.info("CSVStateService initialized.");
+    }
 
     // ========================
     // Cloud Sync Methods
@@ -133,16 +140,10 @@ public class CSVStateService {
         }
     }
 
-
-
     // ========================
     // Projected Transaction API (refactored for robust delegation)
     // ========================
 
-    /**
-     * Loads all projected/future transactions using ProjectedFileService.
-     * @return list of ProjectedTransaction
-     */
     public List<ProjectedTransaction> getAllProjectedTransactions() {
         logger.info("Entering getAllProjectedTransactions()");
         List<BudgetRow> rows = projectedFileService.readAll();
@@ -154,11 +155,6 @@ public class CSVStateService {
         return projections;
     }
 
-    /**
-     * Loads all projected transactions for a specific statement period.
-     * @param period statement period string (must match exactly)
-     * @return list of ProjectedTransaction for the period
-     */
     public List<ProjectedTransaction> getProjectedTransactionsForPeriod(String period) {
         logger.info("Entering getProjectedTransactionsForPeriod('{}')", period);
         if (period == null || period.isBlank()) {
@@ -173,11 +169,6 @@ public class CSVStateService {
         return filtered;
     }
 
-    /**
-     * Adds a projected/future transaction.
-     * @param projectedTx ProjectedTransaction to add
-     * @return true if successful
-     */
     public boolean addProjectedTransaction(ProjectedTransaction projectedTx) {
         logger.info("Entering addProjectedTransaction(): {}", projectedTx);
         if (projectedTx == null) {
@@ -194,20 +185,12 @@ public class CSVStateService {
         }
     }
 
-    /**
-     * Updates a projected transaction in the projections file.
-     * Matches by all fields (robust for no unique key; if you add UUID, update this).
-     * @param original original ProjectedTransaction to match
-     * @param updated updated ProjectedTransaction to replace it
-     * @return true if update succeeded
-     */
     public boolean updateProjectedTransaction(ProjectedTransaction original, ProjectedTransaction updated) {
         logger.info("Entering updateProjectedTransaction(): original={}, updated={}", original, updated);
         if (original == null || updated == null) {
             logger.error("Null argument given to updateProjectedTransaction.");
             return false;
         }
-        // Find and update the first row matching all fields of 'original'
         List<BudgetRow> all = projectedFileService.readAll();
         Optional<BudgetRow> rowToUpdate = all.stream()
                 .filter(row -> projectedTransactionEquals(row, original))
@@ -221,19 +204,12 @@ public class CSVStateService {
         return updatedFlag;
     }
 
-    /**
-     * Deletes a projected transaction from the projections file.
-     * Matches by all fields (robust for no unique key; if you add UUID, update this).
-     * @param tx ProjectedTransaction to delete
-     * @return true if deleted
-     */
     public boolean deleteProjectedTransaction(ProjectedTransaction tx) {
         logger.info("Entering deleteProjectedTransaction(): {}", tx);
         if (tx == null) {
             logger.error("Null argument to deleteProjectedTransaction.");
             return false;
         }
-        // Find and delete the first row matching all fields of 'tx'
         List<BudgetRow> all = projectedFileService.readAll();
         Optional<BudgetRow> rowToDelete = all.stream()
                 .filter(row -> projectedTransactionEquals(row, tx))
@@ -251,11 +227,6 @@ public class CSVStateService {
     // Helpers for matching/conversion (robust, reusable)
     // ========================
 
-    /**
-     * Converts a BudgetRow to a ProjectedTransaction.
-     * @param row BudgetRow to convert
-     * @return ProjectedTransaction or null if conversion fails
-     */
     private ProjectedTransaction convertToProjectedTransaction(BudgetRow row) {
         logger.debug("Converting BudgetRow to ProjectedTransaction: {}", row);
         try {
@@ -272,7 +243,6 @@ public class CSVStateService {
             if (row instanceof ProjectedTransaction) {
                 statementPeriod = ((ProjectedTransaction) row).getStatementPeriod();
             } else if (row instanceof BudgetTransaction) {
-                // BudgetTransaction may have statementPeriod, but we never use it for logic
                 statementPeriod = ((BudgetTransaction) row).getStatementPeriod();
             } else {
                 statementPeriod = getCurrentStatementPeriod();
@@ -287,11 +257,6 @@ public class CSVStateService {
         }
     }
 
-    /**
-     * Checks whether a BudgetRow matches all fields of a ProjectedTransaction.
-     * Used for robust matching when no UUID is available.
-     * Only compares visible/editable fields: Name, Amount, Category, Criticality, Account, Created Time, Statement Period.
-     */
     private boolean projectedTransactionEquals(BudgetRow row, ProjectedTransaction tx) {
         logger.debug("Entering projectedTransactionEquals: row={}, tx={}", row, tx);
         if (row == null || tx == null) {
@@ -314,10 +279,6 @@ public class CSVStateService {
         return match;
     }
 
-    /**
-     * Builds a unique key for a BudgetRow for robust update/delete operations.
-     * Uses only fields shown in the current UI/table: Name, Amount, Category, Criticality, Account, Created Time, Statement Period.
-     */
     private String buildRowUniqueKey(BudgetRow row) {
         logger.debug("Entering buildRowUniqueKey for row={}", row);
         String key = String.join("|",
@@ -333,15 +294,10 @@ public class CSVStateService {
         return key;
     }
 
-    /**
-     * Retrieves the statement period for a BudgetRow, falling back to current period if not present.
-     * For BudgetTransaction, this is only used for projection operations (never for transaction logic).
-     */
     private String getStatementPeriodForRow(BudgetRow row) {
         if (row instanceof ProjectedTransaction) {
             return ((ProjectedTransaction) row).getStatementPeriod();
         } else if (row instanceof BudgetTransaction) {
-            // For BudgetTransaction, statementPeriod is present but not used for transaction logic.
             return ((BudgetTransaction) row).getStatementPeriod();
         } else {
             return getCurrentStatementPeriod();
@@ -352,10 +308,6 @@ public class CSVStateService {
     // Statement period & file management
     // ========================
 
-    /**
-     * Gets the currently active statement period from LocalCacheService.
-     * @return The current statement period, or null if not set.
-     */
     public String getCurrentStatementPeriod() {
         logger.info("Entering getCurrentStatementPeriod()");
         String period = localCacheService.getCurrentStatement();
@@ -367,10 +319,6 @@ public class CSVStateService {
         return period;
     }
 
-    /**
-     * Sets the current statement period in LocalCacheService.
-     * @param period The statement period to set.
-     */
     public void setCurrentStatementPeriod(String period) {
         logger.info("Entering setCurrentStatementPeriod(): {}", period);
         if (period == null || period.isEmpty()) {
@@ -381,12 +329,6 @@ public class CSVStateService {
         logger.info("Set current statement period to '{}'", period);
     }
 
-    /**
-     * Gets all budget transactions in the current working file.
-     * No statement period filtering is applied; all transactions in the working file are considered current.
-     * The statementPeriod field in BudgetTransaction is ignored for all transaction logic.
-     * @return List of BudgetTransaction for the working file, or empty list if none.
-     */
     public List<BudgetTransaction> getCurrentTransactions() {
         logger.info("Entering getCurrentTransactions()");
         String statementFile = getCurrentStatementFilePath();
@@ -404,13 +346,6 @@ public class CSVStateService {
         return txs;
     }
 
-    /**
-     * Saves a list of imported BudgetTransaction objects to the current working statement file.
-     * Logs all actions, validates input, and returns true if all transactions were saved successfully.
-     *
-     * @param transactions List of BudgetTransaction objects to save (must not be null or empty).
-     * @return true if all transactions were written to the working file, false otherwise.
-     */
     public boolean saveImportedTransactions(List<BudgetTransaction> transactions) {
         logger.info("Entering saveImportedTransactions() with {} transaction(s).", transactions == null ? 0 : transactions.size());
         if (transactions == null || transactions.isEmpty()) {
@@ -438,10 +373,6 @@ public class CSVStateService {
         return successCount == transactions.size();
     }
 
-    // ========================
-    // Statement file path and archive/rollover logic unchanged
-    // ========================
-
     public String getCurrentStatementFilePath() {
         logger.info("Entering getCurrentStatementFilePath()");
         String path = localCacheService.getBudgetCsvPath();
@@ -459,25 +390,15 @@ public class CSVStateService {
         logger.info("Set current statement file path to '{}'", filePath);
     }
 
-    /**
-     * Converts a BudgetRow to a BudgetTransaction.
-     * Ensures statementPeriod is never null to avoid IllegalArgumentException.
-     * For transactions from files without a statementPeriod column, uses an empty string.
-     * Logs all conversions and any fallback behavior.
-     * @param row BudgetRow to convert
-     * @return BudgetTransaction
-     */
     private BudgetTransaction convertToTransaction(BudgetRow row) {
         logger.info("Converting BudgetRow to BudgetTransaction: {}", row);
         String statementPeriod = null;
         if (row instanceof BudgetTransaction) {
             statementPeriod = ((BudgetTransaction) row).getStatementPeriod();
         }
-        // Defensive: If null, set to empty string (never pass null to constructor)
         if (statementPeriod == null) {
             statementPeriod = "";
         }
-        // Always pass paymentMethod from BudgetRow
         BudgetTransaction tx = new BudgetTransaction(
                 row.getName(),
                 row.getAmount(),
@@ -492,5 +413,39 @@ public class CSVStateService {
         );
         logger.info("Converted row: {}", tx);
         return tx;
+    }
+
+    /**
+     * Validates connectivity to the DigitalOcean Spaces cloud sync service.
+     * Calls DigitalOceanWorkspaceService.validateConnection() and logs all results.
+     *
+     * @return true if the DigitalOcean service is configured and reachable; false otherwise.
+     */
+    public boolean validateCloudConnection() {
+        logger.info("Entering validateCloudConnection() in CSVStateService.");
+        if (digitalOceanWorkspaceService == null) {
+            logger.error("DigitalOceanWorkspaceService is null in CSVStateService. Cannot validate cloud connection.");
+            return false;
+        }
+        try {
+            boolean result = digitalOceanWorkspaceService.validateConnection();
+            if (result) {
+                logger.info("DigitalOceanWorkspaceService connection validated successfully.");
+            } else {
+                logger.error("DigitalOceanWorkspaceService failed connection validation.");
+            }
+            return result;
+        } catch (Exception e) {
+            logger.error("Exception during cloud connection validation in CSVStateService: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Provides access to the internal DigitalOceanWorkspaceService instance.
+     * @return the DigitalOceanWorkspaceService, or null if not initialized.
+     */
+    public DigitalOceanWorkspaceService getDigitalOceanService() {
+        return digitalOceanWorkspaceService;
     }
 }

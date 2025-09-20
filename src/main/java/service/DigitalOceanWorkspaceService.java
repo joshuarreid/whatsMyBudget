@@ -9,6 +9,7 @@ import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.model.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import model.WorkspaceDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,6 +98,7 @@ public class DigitalOceanWorkspaceService {
         logger.info("Uploading versioned workspace to key: {}", keyName);
 
         ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
         File tempFile = File.createTempFile("workspace_", ".json");
         try (FileOutputStream fos = new FileOutputStream(tempFile)) {
             mapper.writeValue(fos, workspace);
@@ -197,6 +199,7 @@ public class DigitalOceanWorkspaceService {
             S3Object s3Object = s3.getObject(new GetObjectRequest(bucket, newest.getKey()));
             try (InputStream in = s3Object.getObjectContent()) {
                 ObjectMapper mapper = new ObjectMapper();
+                mapper.registerModule(new JavaTimeModule());
                 WorkspaceDTO workspace = mapper.readValue(in, WorkspaceDTO.class);
                 logger.info("WorkspaceDTO downloaded and deserialized from '{}'", newest.getKey());
 
@@ -212,5 +215,37 @@ public class DigitalOceanWorkspaceService {
             logger.error("Failed to download or deserialize backup: {}", e.getMessage(), e);
         }
         return null;
+    }
+
+    /**
+     * Validates the ability to connect to DigitalOcean Spaces bucket using the configured credentials.
+     * Attempts to list objects with a minimal prefix. Logs all actions and returns true if successful, false otherwise.
+     * @return true if connection and permissions are valid; false otherwise.
+     */
+    public boolean validateConnection() {
+        logger.info("Entering validateConnection() in DigitalOceanWorkspaceService.");
+        logger.info("Validating DigitalOcean Spaces connection: endpoint='{}', bucket='{}'", spacesEndpoint, bucket);
+        try {
+            // Attempt to list objects with a minimal prefix to verify bucket access and credentials.
+            ListObjectsRequest request = new ListObjectsRequest()
+                    .withBucketName(bucket)
+                    .withPrefix("cloud/") // Minimal scope, adjust as needed
+                    .withMaxKeys(1);
+            ObjectListing listing = s3.listObjects(request);
+
+            if (listing != null) {
+                logger.info("Successfully connected to DigitalOcean Spaces bucket '{}'. At least one object listing succeeded.", bucket);
+                return true;
+            } else {
+                logger.error("Received null response when listing objects from bucket '{}'.", bucket);
+                return false;
+            }
+        } catch (AmazonServiceException e) {
+            logger.error("AmazonServiceException during validateConnection: {} - {}", e.getErrorCode(), e.getMessage(), e);
+            return false;
+        } catch (Exception e) {
+            logger.error("Exception during DigitalOcean Spaces connection validation: {}", e.getMessage(), e);
+            return false;
+        }
     }
 }

@@ -18,8 +18,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Main window for the Statement-Based Budgeting app.
- * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions, making payments, and exiting.
+ * app.Main window for the Statement-Based Budgeting app.
+ * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions, making payments, syncing to cloud, and exiting.
  *
  * Spring @Autowired is used for all service dependencies.
  * Only runtime parameters (lastView, firstLaunch) are passed in the constructor.
@@ -104,6 +104,37 @@ public class MainWindow extends JFrame {
         getContentPane().add(tabbedPane, BorderLayout.CENTER);
 
         logger.info("MainWindow setup complete.");
+
+    }
+
+    /**
+     * Validates the DigitalOcean cloud sync service on app launch.
+     * If validation fails, shows an error dialog and logs the error.
+     */
+    private void validateCloudServiceOnLaunch() {
+        logger.info("Validating DigitalOcean cloud sync service on launch.");
+        if (csvStateService == null) {
+            logger.error("CSVStateService is null in validateCloudServiceOnLaunch.");
+            JOptionPane.showMessageDialog(this, "Critical error: Cloud sync service unavailable.", "Cloud Sync Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        try {
+            // Call the robust DigitalOcean connection validation method
+            if (!csvStateService.validateCloudConnection()) {
+                logger.error("DigitalOcean cloud sync service failed validation. Cloud features will be unavailable.");
+                JOptionPane.showMessageDialog(this,
+                        "Cloud sync is not configured correctly or cannot connect to DigitalOcean.\n" +
+                                "Please check your cloud sync settings before using backup/sync features.",
+                        "Cloud Sync Not Configured", JOptionPane.ERROR_MESSAGE);
+            } else {
+                logger.info("DigitalOcean cloud sync service validated successfully.");
+            }
+        } catch (Exception e) {
+            logger.error("Exception during DigitalOcean cloud sync validation: {}", e.getMessage(), e);
+            JOptionPane.showMessageDialog(this,
+                    "An error occurred while validating cloud sync:\n" + e.getMessage(),
+                    "Cloud Sync Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**
@@ -116,6 +147,7 @@ public class MainWindow extends JFrame {
             logger.error("Injected CSVStateService is null!");
         }
         this.csvStateService = csvStateService;
+
     }
 
     /**
@@ -143,7 +175,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Creates a menu bar with File > Import Transactions, Make Payment, Manage Projected Expenses, Exit.
+     * Creates a menu bar with File > Import Transactions, Make Payment, Sync to Cloud, Manage Projected Expenses, Exit.
      */
     private JMenuBar createMenuBar() {
         logger.info("Creating menu bar.");
@@ -157,11 +189,16 @@ public class MainWindow extends JFrame {
             handleImportTransactions();
         });
 
-        // NEW: Make Payment menu item
         JMenuItem makePaymentItem = new JMenuItem("Make Payment");
         makePaymentItem.addActionListener(e -> {
             logger.info("User selected Make Payment from menu.");
             handleMakePayment();
+        });
+
+        JMenuItem syncToCloudItem = new JMenuItem("Sync to Cloud");
+        syncToCloudItem.addActionListener(e -> {
+            logger.info("User selected Sync to Cloud from menu.");
+            handleSyncToCloud();
         });
 
         JMenuItem manageProjectedItem = new JMenuItem("Manage Projected Expenses");
@@ -177,7 +214,8 @@ public class MainWindow extends JFrame {
         });
 
         fileMenu.add(importItem);
-        fileMenu.add(makePaymentItem); // Inserted here in order
+        fileMenu.add(makePaymentItem);
+        fileMenu.add(syncToCloudItem); // Above Manage Projected and Exit for prominence
         fileMenu.add(manageProjectedItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
@@ -185,6 +223,27 @@ public class MainWindow extends JFrame {
 
         logger.info("Menu bar created.");
         return menuBar;
+    }
+
+    /**
+     * Handles the Sync to Cloud workflow.
+     * Invokes CSVStateService.backupToCloud(), logs all actions, and notifies user of the result.
+     */
+    private void handleSyncToCloud() {
+        logger.info("Starting Sync to Cloud workflow from MainWindow.");
+        if (csvStateService == null) {
+            logger.error("CSVStateService is null in handleSyncToCloud.");
+            JOptionPane.showMessageDialog(this, "Application error: Cloud sync service unavailable.", "Sync Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        try {
+            csvStateService.backupToCloud();
+            logger.info("Cloud backup completed successfully.");
+            JOptionPane.showMessageDialog(this, "Cloud backup completed successfully.", "Sync to Cloud", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            logger.error("Cloud backup failed: {}", e.getMessage(), e);
+            JOptionPane.showMessageDialog(this, "Cloud backup failed:\n" + e.getMessage(), "Sync Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**
