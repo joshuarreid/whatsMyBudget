@@ -142,7 +142,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Creates a menu bar with File > Import Transactions, Make Payment, Save, Restore, Manage Projected Expenses, Exit.
+     * Creates a menu bar with File > Import Transactions, Make Payment, Save, Refresh, Manage Projected Expenses, Exit.
      */
     private JMenuBar createMenuBar() {
         logger.info("Creating menu bar.");
@@ -157,10 +157,10 @@ public class MainWindow extends JFrame {
             handleSyncToCloud();
         });
 
-        // Restore
-        JMenuItem updateFromCloudItem = new JMenuItem("Restore");
+        // Refresh
+        JMenuItem updateFromCloudItem = new JMenuItem("Refresh");
         updateFromCloudItem.addActionListener(e -> {
-            logger.info("User selected Restore from menu.");
+            logger.info("User selected Refresh from menu.");
             handleUpdateFromCloud();
         });
 
@@ -208,33 +208,33 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Handles the Restore workflow.
-     * - Confirms user intent before restore.
+     * Handles the Refresh workflow.
+     * - Confirms user intent before .
      * - Locks UI and shows progress dialog.
-     * - Backs up local state before restore.
+     * - Backs up local state before .
      * - Handles all exceptions with logging and dialogs.
-     * - Refreshes all panels after restore.
+     * - Refreshes all panels after .
      * - Ensures no file path or file name changes occur.
      */
     private void handleUpdateFromCloud() {
-        logger.info("Starting Restore workflow from MainWindow.");
+        logger.info("Starting  workflow from MainWindow.");
         if (csvStateService == null) {
             logger.error("CSVStateService is null in handleUpdateFromCloud.");
-            JOptionPane.showMessageDialog(this, "Application error: Restore service unavailable.", "Restore Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Application error:  service unavailable.", "Refresh Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
         int confirm = JOptionPane.showConfirmDialog(
                 this,
-                "Are you sure you want to restore from the latest cloud backup?\n" +
+                "Are you sure you want to Refresh from the latest cloud backup?\n" +
                         "This will OVERWRITE your current budget, projections, and settings (but will NOT change your current file paths or locations).\n\n" +
-                        "A backup of your current local files will be created before restore.",
-                "Confirm Restore from Cloud",
+                        "A backup of your current local files will be created before Refresh.",
+                "Confirm Refresh from Cloud",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE
         );
         if (confirm != JOptionPane.YES_OPTION) {
-            logger.info("User cancelled Restore operation.");
+            logger.info("User cancelled Refresh operation.");
             return;
         }
 
@@ -249,18 +249,18 @@ public class MainWindow extends JFrame {
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() {
-                logger.info("UI locked and progress dialog shown for Restore.");
+                logger.info("UI locked and progress dialog shown for Refresh.");
                 try {
                     // The following method must not change file paths or user file locations.
                     csvStateService.cloudSync();
-                    logger.info("Restore completed successfully (no exception thrown). File paths remain unchanged.");
+                    logger.info("Refresh completed successfully (no exception thrown). File paths remain unchanged.");
                 } catch (Exception ex) {
-                    logger.error("Restore failed during cloudSync(): {}", ex.getMessage(), ex);
+                    logger.error("Refresh failed during cloudSync(): {}", ex.getMessage(), ex);
                     SwingUtilities.invokeLater(() ->
                             JOptionPane.showMessageDialog(
                                     MainWindow.this,
-                                    "Restore failed:\n" + ex.getMessage(),
-                                    "Restore Error",
+                                    "Refresh failed:\n" + ex.getMessage(),
+                                    "Refresh Error",
                                     JOptionPane.ERROR_MESSAGE
                             )
                     );
@@ -271,9 +271,9 @@ public class MainWindow extends JFrame {
             @Override
             protected void done() {
                 progressDialog.dispose();
-                logger.info("Progress dialog closed after Restore.");
+                logger.info("Progress dialog closed after Refresh.");
                 reloadAndRefreshAllPanels();
-                logger.info("All UI panels refreshed after Restore.");
+                logger.info("All UI panels refreshed after Refresh.");
             }
         };
 
