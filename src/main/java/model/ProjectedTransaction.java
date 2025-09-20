@@ -1,5 +1,6 @@
 package model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.NoArgsConstructor;
 import org.slf4j.Logger;
 import util.AppLogger;
@@ -8,6 +9,7 @@ import util.AppLogger;
  * Represents a projected (planned) transaction for a statement period.
  * Used for upcoming known expenses that should be included in budgeting and totals, but are not yet actual transactions.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @NoArgsConstructor
 public class ProjectedTransaction extends BudgetTransaction {
     private static final Logger logger = AppLogger.getLogger(ProjectedTransaction.class);
