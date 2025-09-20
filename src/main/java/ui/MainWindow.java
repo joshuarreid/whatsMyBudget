@@ -276,13 +276,26 @@ public class MainWindow extends JFrame {
 
     /**
      * Handles the Save workflow.
+     * Prompts the user for confirmation before saving.
      * Invokes CSVStateService.backupToCloud(), logs all actions, and notifies user of the result.
      */
     private void handleSyncToCloud() {
         logger.info("Starting Save workflow from MainWindow.");
         if (csvStateService == null) {
             logger.error("CSVStateService is null in handleSyncToCloud.");
-            JOptionPane.showMessageDialog(this, "Application error: Restore service unavailable.", "Sync Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Application error: Save service unavailable.", "Sync Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Are you sure you want to save (backup) your current workspace to the cloud?\n\n"
+                        + "This will overwrite your previous cloud backup.",
+                "Confirm Save to Cloud",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE
+        );
+        if (confirm != JOptionPane.YES_OPTION) {
+            logger.info("User declined to save workspace to cloud. Save aborted.");
             return;
         }
         try {

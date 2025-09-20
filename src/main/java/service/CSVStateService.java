@@ -11,8 +11,11 @@ import org.springframework.stereotype.Service;
 import util.AppLogger;
 import util.ProjectedRowConverter;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -144,7 +147,9 @@ public class CSVStateService {
     }
 
     /**
-     * Backs up the given file to a timestamped copy in the same directory.
+     * Backs up the given file to a timestamped copy in the same directory,
+     * naming it as originalName_YYYYMMDD_HHmmss.ext (e.g., budget_20250920_021900.csv).
+     * Deletes previous backups matching originalName_*.ext before creating a new backup.
      * Returns the backup file path, or null if backup fails.
      */
     private String backupFile(String originalFilePath, String label) {
@@ -154,16 +159,43 @@ public class CSVStateService {
             return null;
         }
         try {
-            java.io.File original = new java.io.File(originalFilePath);
+            File original = new File(originalFilePath);
             if (!original.exists()) {
                 logger.warn("File '{}' does not exist. Skipping {} backup.", originalFilePath, label);
                 return null;
             }
-            String backupPath = originalFilePath + ".bak." +
-                    java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(java.time.LocalDateTime.now());
-            java.nio.file.Files.copy(original.toPath(), java.nio.file.Paths.get(backupPath));
+            Path dir = original.toPath().getParent();
+            String originalName = original.getName();
+            String extension = "";
+            int dot = originalName.lastIndexOf('.');
+            if (dot != -1) {
+                extension = originalName.substring(dot);
+                originalName = originalName.substring(0, dot);
+            }
+            String datePart = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(LocalDateTime.now());
+            String backupName = originalName + "_" + datePart + extension;
+            Path backupPath = dir != null ? dir.resolve(backupName) : Paths.get(backupName);
+
+            // Delete previous backups for this file (pattern: originalName_*.ext)
+            final String backupGlob = originalName + "_*" + extension;
+            if (dir != null) {
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, backupGlob)) {
+                    for (Path path : stream) {
+                        try {
+                            Files.deleteIfExists(path);
+                            logger.info("Deleted previous backup file: '{}'", path.toString());
+                        } catch (Exception ex) {
+                            logger.warn("Failed to delete previous backup file '{}': {}", path.toString(), ex.getMessage());
+                        }
+                    }
+                } catch (Exception ex) {
+                    logger.warn("Failed to list previous backup files for deletion: {}", ex.getMessage());
+                }
+            }
+
+            Files.copy(original.toPath(), backupPath, StandardCopyOption.REPLACE_EXISTING);
             logger.info("{} file backed up to '{}'.", label, backupPath);
-            return backupPath;
+            return backupPath.toString();
         } catch (Exception e) {
             logger.error("Failed to backup {} file '{}': {}", label, originalFilePath, e.getMessage(), e);
             return null;
@@ -171,7 +203,9 @@ public class CSVStateService {
     }
 
     /**
-     * Serializes and saves the LocalCacheState to a timestamped backup file.
+     * Serializes and saves the LocalCacheState to a timestamped backup file,
+     * naming it as localCacheState_YYYYMMDD_HHmmss.json.
+     * Deletes previous backups matching localCacheState_*.json before creating a new backup.
      * Returns the backup file path, or null if backup fails.
      */
     private String backupLocalCache(LocalCacheState cacheState) {
@@ -181,10 +215,29 @@ public class CSVStateService {
             return null;
         }
         try {
-            String backupFile = "localCacheState.bak." +
-                    java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(java.time.LocalDateTime.now()) + ".json";
+            String baseName = "localCacheState";
+            String extension = ".json";
+            String datePart = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(LocalDateTime.now());
+            String backupFile = baseName + "_" + datePart + extension;
+            Path dir = Paths.get(".").toAbsolutePath().normalize();
+
+            // Delete previous local cache backups (pattern: localCacheState_*.json)
+            String backupGlob = baseName + "_*" + extension;
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, backupGlob)) {
+                for (Path path : stream) {
+                    try {
+                        Files.deleteIfExists(path);
+                        logger.info("Deleted previous LocalCacheState backup: '{}'", path.toString());
+                    } catch (Exception ex) {
+                        logger.warn("Failed to delete previous LocalCacheState backup '{}': {}", path.toString(), ex.getMessage());
+                    }
+                }
+            } catch (Exception ex) {
+                logger.warn("Failed to list previous LocalCacheState backups for deletion: {}", ex.getMessage());
+            }
+
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            mapper.writeValue(new java.io.File(backupFile), cacheState);
+            mapper.writeValue(new File(backupFile), cacheState);
             logger.info("LocalCacheState backed up to '{}'.", backupFile);
             return backupFile;
         } catch (Exception e) {
