@@ -208,10 +208,10 @@ public class CSVStateService {
         // Example: javax.swing.JOptionPane.showMessageDialog(null, message, "Restore Complete", JOptionPane.INFORMATION_MESSAGE);
         logger.info("User-facing info dialog: {}", message);
     }
-    
 
     /**
      * Applies a WorkspaceDTO's state to all relevant local services/files.
+     * Never overwrites the user's local budgetCsvPath or other file paths with cloud values.
      * Returns true if all sections applied successfully, false otherwise.
      * @param workspace WorkspaceDTO to apply
      * @return true if successful, false otherwise
@@ -228,8 +228,19 @@ public class CSVStateService {
                 logger.info("Projected transactions applied.");
             }
             if (workspace.getLocalCacheState() != null) {
-                localCacheService.setLocalCacheState(workspace.getLocalCacheState());
-                logger.info("Local cache state applied.");
+                LocalCacheState restoredCache = workspace.getLocalCacheState();
+                String restoredPath = restoredCache.getBudgetCsvPath();
+                String localPath = localCacheService.getLocalCacheState().getBudgetCsvPath();
+                logger.info("Restored budgetCsvPath from cloud: '{}'", restoredPath);
+                logger.info("Current local budgetCsvPath: '{}'", localPath);
+
+                // Always preserve the local path; never overwrite with cloud value
+                if (!Objects.equals(restoredPath, localPath)) {
+                    logger.warn("Cloud backup budgetCsvPath ('{}') differs from local ('{}'). Keeping local path.", restoredPath, localPath);
+                    restoredCache.setBudgetCsvPath(localPath);
+                }
+                localCacheService.setLocalCacheState(restoredCache);
+                logger.info("Local cache state applied, local file path preserved.");
             }
             return true;
         } catch (Exception e) {
