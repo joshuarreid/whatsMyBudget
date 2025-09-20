@@ -2,6 +2,7 @@ package service;
 
 import com.opencsv.exceptions.CsvValidationException;
 import model.BudgetRow;
+import model.BudgetTransaction;
 import org.springframework.stereotype.Service;
 import util.BudgetRowConverter;
 import util.AppLogger;
@@ -283,6 +284,39 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
             logger.info("Wrote {} rows to CSV file '{}'", rows.size(), filePath);
         } catch (IOException e) {
             logger.error("Failed to write to CSV file '{}': {}", filePath, e.getMessage());
+        }
+    }
+
+    /**
+     * Overwrites the CSV file with the provided list of BudgetTransaction objects.
+     * @param transactions List of BudgetTransaction objects to write.
+     */
+    public void overwriteAll(List<BudgetTransaction> transactions) {
+        logger.info("Entering overwriteAll() in BudgetFileService with {} transactions.", transactions == null ? 0 : transactions.size());
+        ensureCsvFileReady();
+        if (transactions == null) {
+            logger.warn("overwriteAll called with null transactions list. Aborting.");
+            return;
+        }
+        try (
+                Writer writer = new FileWriter(filePath, false);
+                CSVWriter csvWriter = new CSVWriter(writer,
+                        CSVWriter.DEFAULT_SEPARATOR,
+                        CSVWriter.DEFAULT_QUOTE_CHARACTER,
+                        CSVWriter.DEFAULT_ESCAPE_CHARACTER,
+                        CSVWriter.DEFAULT_LINE_END)
+        ) {
+            csvWriter.writeNext(headers.toArray(new String[0]));
+            for (BudgetTransaction tx : transactions) {
+                Map<String, String> map = BudgetRowConverter.budgetRowToMap(tx);
+                String[] values = headers.stream()
+                        .map(h -> map.getOrDefault(h, ""))
+                        .toArray(String[]::new);
+                csvWriter.writeNext(values);
+            }
+            logger.info("Successfully overwrote {} transactions to CSV file '{}'.", transactions.size(), filePath);
+        } catch (IOException e) {
+            logger.error("Failed to overwrite transactions in CSV file '{}': {}", filePath, e.getMessage(), e);
         }
     }
 }

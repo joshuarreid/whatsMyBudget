@@ -3,6 +3,8 @@ package service;
 import model.BudgetRow;
 import model.BudgetTransaction;
 import model.ProjectedTransaction;
+import model.LocalCacheState;
+import model.WorkspaceDTO;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,103 @@ public class CSVStateService {
 
     @Autowired
     private LocalCacheService localCacheService; // For config, statement period, last-open files
+
+    @Autowired(required = false)
+    private DigitalOceanWorkspaceService digitalOceanWorkspaceService; // For cloud sync (optional for tests)
+
+    // ========================
+    // Cloud Sync Methods
+    // ========================
+
+    /**
+     * Backs up all app state to the cloud using DigitalOceanWorkspaceService.
+     * Gathers current transactions, projections, local cache/config, builds a WorkspaceDTO, and uploads a versioned backup.
+     * Logs all actions, errors, and result.
+     */
+    public void backupToCloud() {
+        logger.info("Entering backupToCloud() for cloud sync.");
+        try {
+            List<BudgetTransaction> budgetTransactions = getCurrentTransactions();
+            List<ProjectedTransaction> projectedTransactions = getAllProjectedTransactions();
+            LocalCacheState localCacheState = localCacheService.getLocalCacheState();
+
+            WorkspaceDTO workspace = new WorkspaceDTO();
+            workspace.setBudgetTransactions(budgetTransactions);
+            workspace.setProjectedTransactions(projectedTransactions);
+            workspace.setLocalCacheState(localCacheState);
+            workspace.setVersion(localCacheState != null ? localCacheState.getVersion() : "1");
+            workspace.setLastModified(java.time.Instant.now().toString());
+            workspace.updateAllSectionHashes();
+
+            if (digitalOceanWorkspaceService == null) {
+                logger.error("DigitalOceanWorkspaceService is not initialized. Cannot perform cloud backup.");
+                return;
+            }
+            digitalOceanWorkspaceService.uploadWorkspaceVersioned(workspace);
+            logger.info("Cloud backup completed successfully.");
+        } catch (Exception e) {
+            logger.error("Cloud backup failed: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Syncs the latest cloud backup to the local app state.
+     * Downloads and validates the latest WorkspaceDTO from cloud, and replaces in-memory state and files if valid.
+     * Logs all actions, errors, and user-facing results. If sync fails, local state remains unchanged.
+     */
+    public void cloudSync() {
+        logger.info("Entering cloudSync() to restore from cloud backup.");
+        if (digitalOceanWorkspaceService == null) {
+            logger.error("DigitalOceanWorkspaceService is not initialized. Cannot perform cloud sync.");
+            return;
+        }
+        try {
+            WorkspaceDTO workspace = digitalOceanWorkspaceService.downloadLatestWorkspaceBackup();
+            if (workspace == null) {
+                logger.error("No valid workspace backup found in cloud, or backup failed validation.");
+                return;
+            }
+            // Apply cloud state to local services
+            boolean applied = applyWorkspaceDTO(workspace);
+            if (applied) {
+                logger.info("Cloud sync applied successfully.");
+            } else {
+                logger.error("Failed to apply WorkspaceDTO from cloud. Local state unchanged.");
+            }
+        } catch (Exception e) {
+            logger.error("Cloud sync failed: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Applies a WorkspaceDTO's state to all relevant local services/files.
+     * Returns true if all sections applied successfully, false otherwise.
+     * @param workspace WorkspaceDTO to apply
+     * @return true if successful, false otherwise
+     */
+    private boolean applyWorkspaceDTO(WorkspaceDTO workspace) {
+        logger.info("Applying WorkspaceDTO to local state.");
+        try {
+            if (workspace.getBudgetTransactions() != null) {
+                budgetFileService.overwriteAll(workspace.getBudgetTransactions());
+                logger.info("Budget transactions applied.");
+            }
+            if (workspace.getProjectedTransactions() != null) {
+                projectedFileService.overwriteAll(workspace.getProjectedTransactions());
+                logger.info("Projected transactions applied.");
+            }
+            if (workspace.getLocalCacheState() != null) {
+                localCacheService.setLocalCacheState(workspace.getLocalCacheState());
+                logger.info("Local cache state applied.");
+            }
+            return true;
+        } catch (Exception e) {
+            logger.error("Failed to apply WorkspaceDTO to local state: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+
 
     // ========================
     // Projected Transaction API (refactored for robust delegation)
@@ -360,14 +459,6 @@ public class CSVStateService {
         logger.info("Set current statement file path to '{}'", filePath);
     }
 
-    /**
-     * Converts a BudgetRow to a BudgetTransaction.
-     * Ensures statementPeriod is never null to avoid IllegalArgumentException.
-     * For transactions from files without a statementPeriod column, uses an empty string.
-     * Logs all conversions and any fallback behavior.
-     * @param row BudgetRow to convert
-     * @return BudgetTransaction
-     */
     /**
      * Converts a BudgetRow to a BudgetTransaction.
      * Ensures statementPeriod is never null to avoid IllegalArgumentException.

@@ -2,6 +2,7 @@ package service;
 
 import com.opencsv.exceptions.CsvValidationException;
 import model.BudgetRow;
+import model.ProjectedTransaction;
 import org.springframework.stereotype.Service;
 import util.BudgetRowConverter;
 import util.ProjectedRowConverter;
@@ -319,6 +320,35 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
             return ((model.BudgetTransaction) row).getStatementPeriod();
         } else {
             return "";
+        }
+    }
+
+    public void overwriteAll(List<ProjectedTransaction> projectedTransactions) {
+        logger.info("Entering overwriteAll() in ProjectedFileService with {} projected transactions.", projectedTransactions == null ? 0 : projectedTransactions.size());
+        ensureCsvFileReady();
+        if (projectedTransactions == null) {
+            logger.warn("overwriteAll called with null projectedTransactions list. Aborting.");
+            return;
+        }
+        try (
+                Writer writer = new FileWriter(projectedFilePath, false);
+                CSVWriter csvWriter = new CSVWriter(writer,
+                        CSVWriter.DEFAULT_SEPARATOR,
+                        CSVWriter.DEFAULT_QUOTE_CHARACTER,
+                        CSVWriter.DEFAULT_ESCAPE_CHARACTER,
+                        CSVWriter.DEFAULT_LINE_END)
+        ) {
+            csvWriter.writeNext(headers.toArray(new String[0]));
+            for (ProjectedTransaction tx : projectedTransactions) {
+                Map<String, String> map = ProjectedRowConverter.budgetRowToMap(tx);
+                String[] values = headers.stream()
+                        .map(h -> map.getOrDefault(h, ""))
+                        .toArray(String[]::new);
+                csvWriter.writeNext(values);
+            }
+            logger.info("Successfully overwrote {} projected transactions to projections CSV file '{}'.", projectedTransactions.size(), projectedFilePath);
+        } catch (IOException e) {
+            logger.error("Failed to overwrite projected transactions in projections CSV file '{}': {}", projectedFilePath, e.getMessage(), e);
         }
     }
 }
