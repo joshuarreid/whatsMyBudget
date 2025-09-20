@@ -150,49 +150,57 @@ public class MainWindow extends JFrame {
 
         JMenu fileMenu = new JMenu("File");
 
-        JMenuItem importItem = new JMenuItem("Import Transactions");
-        importItem.addActionListener(e -> {
-            logger.info("User selected Import Transactions from menu.");
-            handleImportTransactions();
-        });
-
-        JMenuItem makePaymentItem = new JMenuItem("Make Payment");
-        makePaymentItem.addActionListener(e -> {
-            logger.info("User selected Make Payment from menu.");
-            handleMakePayment();
-        });
-
+        // Save
         JMenuItem syncToCloudItem = new JMenuItem("Save");
         syncToCloudItem.addActionListener(e -> {
             logger.info("User selected Save from menu.");
             handleSyncToCloud();
         });
 
+        // Restore
         JMenuItem updateFromCloudItem = new JMenuItem("Restore");
         updateFromCloudItem.addActionListener(e -> {
             logger.info("User selected Restore from menu.");
             handleUpdateFromCloud();
         });
 
-        JMenuItem manageProjectedItem = new JMenuItem("Manage Projected Expenses");
-        manageProjectedItem.addActionListener(e -> {
-            logger.info("User selected Manage Projected Expenses from menu.");
+        // Manual Import (renamed from Import Transactions)
+        JMenuItem manualImportItem = new JMenuItem("Manual Import");
+        manualImportItem.addActionListener(e -> {
+            logger.info("User selected Manual Import from menu.");
+            handleImportTransactions();
+        });
+
+        // Projected Expenses (renamed from Manage Projected Expenses)
+        JMenuItem projectedExpensesItem = new JMenuItem("Projected Expenses");
+        projectedExpensesItem.addActionListener(e -> {
+            logger.info("User selected Projected Expenses from menu.");
             handleManageProjectedExpenses();
         });
 
+        // Payments (renamed from Make Payment)
+        JMenuItem paymentsItem = new JMenuItem("View Payments");
+        paymentsItem.addActionListener(e -> {
+            logger.info("User selected View Payments from menu.");
+            handleMakePayment();
+        });
+
+        // Exit
         JMenuItem exitItem = new JMenuItem("Exit");
         exitItem.addActionListener(e -> {
             logger.info("User selected Exit from menu. Exiting application.");
             System.exit(0);
         });
 
-        fileMenu.add(importItem);
-        fileMenu.add(makePaymentItem);
+        // Add in new order
         fileMenu.add(syncToCloudItem);
         fileMenu.add(updateFromCloudItem);
-        fileMenu.add(manageProjectedItem);
+        fileMenu.add(manualImportItem);
+        fileMenu.add(projectedExpensesItem);
+        fileMenu.add(paymentsItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
+
         menuBar.add(fileMenu);
 
         logger.info("Menu bar created.");
