@@ -175,6 +175,30 @@ public class WeeklyBreakdownPanel extends JPanel {
 
         txPanel.setTransactions(filteredTxForWeek);
 
+        // Add selection listener to the GenericTablePanel's JTable for tooltip sum on selection
+        JTable innerTable = txPanel.getTable();
+        innerTable.getSelectionModel().addListSelectionListener(e -> {
+            if (e.getValueIsAdjusting()) return;
+            int[] selectedRows = innerTable.getSelectedRows();
+            logger.info("Drilldown table selection changed: selectedRows={}", Arrays.toString(selectedRows));
+            double sum = 0.0;
+            for (int selRow : selectedRows) {
+                Object val = innerTable.getValueAt(selRow, 2); // "Amount" column
+                if (val != null && val.toString().startsWith("$")) {
+                    try {
+                        sum += Double.parseDouble(val.toString().replace("$", "").replace(",", ""));
+                    } catch (Exception ex) {
+                        logger.warn("Failed to parse amount from '{}': {}", val, ex.getMessage());
+                    }
+                }
+            }
+            String tooltip = selectedRows.length <= 1
+                    ? null
+                    : "Total of selected transactions: $" + String.format("%.2f", sum);
+            innerTable.setToolTipText(tooltip);
+            logger.info("Drilldown table tooltip updated: {}", tooltip);
+        });
+
         JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Transactions for " + tableModel.getValueAt(row, 0), Dialog.ModalityType.APPLICATION_MODAL);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dialog.getContentPane().add(txPanel, BorderLayout.CENTER);
