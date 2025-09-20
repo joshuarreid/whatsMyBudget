@@ -351,4 +351,8 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
             logger.error("Failed to overwrite projected transactions in projections CSV file '{}': {}", projectedFilePath, e.getMessage(), e);
         }
     }
+
+    public String getFilePath() {
+        return projectedFilePath;
+    }
 }

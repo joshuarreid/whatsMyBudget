@@ -2,7 +2,7 @@ package model;
 
 import org.slf4j.Logger;
 import util.AppLogger;
-
+import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -13,12 +13,14 @@ import java.util.Locale;
  * Represents a single budget transaction, extending BudgetRow.
  * Adds field for statement period and parsed date.
  */
+@NoArgsConstructor(force = true)
 public class BudgetTransaction extends BudgetRow {
     private static final Logger logger = AppLogger.getLogger(BudgetTransaction.class);
 
     private String statementPeriod;
     private final LocalDate parsedTransactionDate;
     private boolean isDuplicate;
+
 
     /**
      * Constructs a BudgetTransaction with all required fields, including statementPeriod, paymentMethod, and parses the date.

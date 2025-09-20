@@ -84,33 +84,131 @@ public class CSVStateService {
     }
 
     /**
-     * Syncs the latest cloud backup to the local app state.
-     * Downloads and validates the latest WorkspaceDTO from cloud, and replaces in-memory state and files if valid.
-     * Logs all actions, errors, and user-facing results. If sync fails, local state remains unchanged.
+     * Restores the application state from the latest cloud backup.
+     * - Backs up all current local files before applying cloud state.
+     * - Validates the downloaded WorkspaceDTO before applying.
+     * - Logs every step, user action, and error for traceability.
+     * - UI should call lockUI/unlockUI or show/hide progress indicator around this call.
      */
     public void cloudSync() {
-        logger.info("Entering cloudSync() to restore from cloud backup.");
-        if (digitalOceanWorkspaceService == null) {
-            logger.error("DigitalOceanWorkspaceService is not initialized. Cannot perform cloud sync.");
-            return;
-        }
+        logger.info("User initiated cloudSync() to restore from cloud backup.");
+
+        // Notify UI to lock and show progress (assume UI calls these if available)
+        logger.info("Requesting UI to lock with progress indicator for cloud restore.");
         try {
+            // 1. Backup local state
+            logger.info("Creating local backups before applying cloud restore.");
+            String budgetBackupPath = backupFile(budgetFileService.getFilePath(), "budget");
+            String projectedBackupPath = backupFile(projectedFileService.getFilePath(), "projections");
+            String localCacheBackupPath = backupLocalCache(localCacheService.getLocalCacheState());
+
+            logger.info("Local backups created: budgetBackup='{}', projectionsBackup='{}', localCacheBackup='{}'",
+                    budgetBackupPath, projectedBackupPath, localCacheBackupPath);
+
+            // 2. Download from cloud
+            logger.info("Downloading WorkspaceDTO from cloud...");
             WorkspaceDTO workspace = digitalOceanWorkspaceService.downloadLatestWorkspaceBackup();
+
             if (workspace == null) {
-                logger.error("No valid workspace backup found in cloud, or backup failed validation.");
+                logger.error("No valid WorkspaceDTO found in cloud. Restore aborted. Local files remain unchanged.");
+                showErrorDialog("No valid cloud backup found.\nYour local files have NOT been changed.");
                 return;
             }
-            // Apply cloud state to local services
+
+            // 3. Validate cloud data
+            logger.info("Validating downloaded WorkspaceDTO...");
+            if (!workspace.validate()) {
+                logger.error("Downloaded WorkspaceDTO failed validation. Restore aborted. Local files remain unchanged.");
+                showErrorDialog("Cloud backup is invalid or corrupt.\nYour local files have NOT been changed.");
+                return;
+            }
+
+            // 4. Apply to local state
+            logger.info("Applying WorkspaceDTO to local state...");
             boolean applied = applyWorkspaceDTO(workspace);
             if (applied) {
-                logger.info("Cloud sync applied successfully.");
+                logger.info("Cloud restore applied successfully. UI will be refreshed.");
+                showInfoDialog("Workspace successfully restored from cloud backup.");
+                // UI should call reloadAndRefreshAllPanels() after this
             } else {
                 logger.error("Failed to apply WorkspaceDTO from cloud. Local state unchanged.");
+                showErrorDialog("Failed to apply cloud backup.\nYour local files have NOT been changed.");
             }
         } catch (Exception e) {
-            logger.error("Cloud sync failed: {}", e.getMessage(), e);
+            logger.error("Exception during cloud restore: {}", e.getMessage(), e);
+            showErrorDialog("An error occurred during cloud restore:\n" + e.getMessage() + "\nYour local files have NOT been changed.");
+        } finally {
+            // Notify UI to unlock/progress done
+            logger.info("Cloud restore complete. Requesting UI to unlock and hide progress indicator.");
         }
     }
+
+    /**
+     * Backs up the given file to a timestamped copy in the same directory.
+     * Returns the backup file path, or null if backup fails.
+     */
+    private String backupFile(String originalFilePath, String label) {
+        logger.info("Backing up file '{}' ({})...", originalFilePath, label);
+        if (originalFilePath == null || originalFilePath.trim().isEmpty()) {
+            logger.warn("No file path provided for {} backup.", label);
+            return null;
+        }
+        try {
+            java.io.File original = new java.io.File(originalFilePath);
+            if (!original.exists()) {
+                logger.warn("File '{}' does not exist. Skipping {} backup.", originalFilePath, label);
+                return null;
+            }
+            String backupPath = originalFilePath + ".bak." +
+                    java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(java.time.LocalDateTime.now());
+            java.nio.file.Files.copy(original.toPath(), java.nio.file.Paths.get(backupPath));
+            logger.info("{} file backed up to '{}'.", label, backupPath);
+            return backupPath;
+        } catch (Exception e) {
+            logger.error("Failed to backup {} file '{}': {}", label, originalFilePath, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Serializes and saves the LocalCacheState to a timestamped backup file.
+     * Returns the backup file path, or null if backup fails.
+     */
+    private String backupLocalCache(LocalCacheState cacheState) {
+        logger.info("Backing up LocalCacheState...");
+        if (cacheState == null) {
+            logger.warn("No LocalCacheState provided for backup.");
+            return null;
+        }
+        try {
+            String backupFile = "localCacheState.bak." +
+                    java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(java.time.LocalDateTime.now()) + ".json";
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.writeValue(new java.io.File(backupFile), cacheState);
+            logger.info("LocalCacheState backed up to '{}'.", backupFile);
+            return backupFile;
+        } catch (Exception e) {
+            logger.error("Failed to backup LocalCacheState: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Shows an error dialog to the user (to be implemented by the UI layer).
+     */
+    private void showErrorDialog(String message) {
+        // Example: javax.swing.JOptionPane.showMessageDialog(null, message, "Error", JOptionPane.ERROR_MESSAGE);
+        logger.warn("User-facing error dialog: {}", message);
+    }
+
+    /**
+     * Shows an info dialog to the user (to be implemented by the UI layer).
+     */
+    private void showInfoDialog(String message) {
+        // Example: javax.swing.JOptionPane.showMessageDialog(null, message, "Restore Complete", JOptionPane.INFORMATION_MESSAGE);
+        logger.info("User-facing info dialog: {}", message);
+    }
+    
 
     /**
      * Applies a WorkspaceDTO's state to all relevant local services/files.

@@ -319,4 +319,9 @@ public class BudgetFileService implements CSVFileService<BudgetRow> {
             logger.error("Failed to overwrite transactions in CSV file '{}': {}", filePath, e.getMessage(), e);
         }
     }
+
+    public String getFilePath() {
+        return filePath;
+    }
+
 }

@@ -19,7 +19,7 @@ import java.util.Set;
 
 /**
  * app.Main window for the Statement-Based Budgeting app.
- * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions, making payments, syncing to cloud, and exiting.
+ * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions, making payments, syncing to cloud, updating from cloud, and exiting.
  *
  * Spring @Autowired is used for all service dependencies.
  * Only runtime parameters (lastView, firstLaunch) are passed in the constructor.
@@ -104,7 +104,6 @@ public class MainWindow extends JFrame {
         getContentPane().add(tabbedPane, BorderLayout.CENTER);
 
         logger.info("MainWindow setup complete.");
-
     }
 
     /**
@@ -147,7 +146,6 @@ public class MainWindow extends JFrame {
             logger.error("Injected CSVStateService is null!");
         }
         this.csvStateService = csvStateService;
-
     }
 
     /**
@@ -175,7 +173,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Creates a menu bar with File > Import Transactions, Make Payment, Sync to Cloud, Manage Projected Expenses, Exit.
+     * Creates a menu bar with File > Import Transactions, Make Payment, Sync to Cloud, Update from Cloud, Manage Projected Expenses, Exit.
      */
     private JMenuBar createMenuBar() {
         logger.info("Creating menu bar.");
@@ -201,6 +199,12 @@ public class MainWindow extends JFrame {
             handleSyncToCloud();
         });
 
+        JMenuItem updateFromCloudItem = new JMenuItem("Update from Cloud");
+        updateFromCloudItem.addActionListener(e -> {
+            logger.info("User selected Update from Cloud from menu.");
+            handleUpdateFromCloud();
+        });
+
         JMenuItem manageProjectedItem = new JMenuItem("Manage Projected Expenses");
         manageProjectedItem.addActionListener(e -> {
             logger.info("User selected Manage Projected Expenses from menu.");
@@ -215,7 +219,8 @@ public class MainWindow extends JFrame {
 
         fileMenu.add(importItem);
         fileMenu.add(makePaymentItem);
-        fileMenu.add(syncToCloudItem); // Above Manage Projected and Exit for prominence
+        fileMenu.add(syncToCloudItem);
+        fileMenu.add(updateFromCloudItem);
         fileMenu.add(manageProjectedItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
@@ -223,6 +228,79 @@ public class MainWindow extends JFrame {
 
         logger.info("Menu bar created.");
         return menuBar;
+    }
+
+    /**
+     * Handles the Update from Cloud workflow.
+     * - Confirms user intent before restore.
+     * - Locks UI and shows progress dialog.
+     * - Backs up local state before restore.
+     * - Handles all exceptions with logging and dialogs.
+     * - Refreshes all panels after restore.
+     */
+    private void handleUpdateFromCloud() {
+        logger.info("Starting Update from Cloud workflow from MainWindow.");
+        if (csvStateService == null) {
+            logger.error("CSVStateService is null in handleUpdateFromCloud.");
+            JOptionPane.showMessageDialog(this, "Application error: Cloud sync service unavailable.", "Cloud Restore Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Are you sure you want to restore from the latest cloud backup?\n" +
+                        "This will OVERWRITE your current budget, projections, and settings.\n\n" +
+                        "A backup of your current local files will be created before restore.",
+                "Confirm Restore from Cloud",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+        if (confirm != JOptionPane.YES_OPTION) {
+            logger.info("User cancelled Update from Cloud operation.");
+            return;
+        }
+
+        final JDialog progressDialog = new JDialog(this, "Restoring from Cloud...", true);
+        JLabel progressLabel = new JLabel("Restoring workspace from cloud backup. Please wait...");
+        progressDialog.setLayout(new BorderLayout());
+        progressDialog.add(progressLabel, BorderLayout.CENTER);
+        progressDialog.setSize(400, 120);
+        progressDialog.setLocationRelativeTo(this);
+        progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() {
+                logger.info("UI locked and progress dialog shown for cloud restore.");
+                try {
+                    csvStateService.cloudSync();
+                    logger.info("Cloud restore completed successfully (no exception thrown).");
+                } catch (Exception ex) {
+                    logger.error("Cloud restore failed during cloudSync(): {}", ex.getMessage(), ex);
+                    SwingUtilities.invokeLater(() ->
+                            JOptionPane.showMessageDialog(
+                                    MainWindow.this,
+                                    "Cloud restore failed:\n" + ex.getMessage(),
+                                    "Cloud Restore Error",
+                                    JOptionPane.ERROR_MESSAGE
+                            )
+                    );
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                progressDialog.dispose();
+                logger.info("Progress dialog closed after cloud restore.");
+                reloadAndRefreshAllPanels();
+                logger.info("All UI panels refreshed after Update from Cloud.");
+            }
+        };
+
+        // Show progress dialog and start worker
+        SwingUtilities.invokeLater(() -> progressDialog.setVisible(true));
+        worker.execute();
     }
 
     /**
