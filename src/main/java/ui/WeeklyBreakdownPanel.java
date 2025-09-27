@@ -68,6 +68,7 @@ public class WeeklyBreakdownPanel extends JPanel {
 
         updateTable();
         setupTableRowClickListener();
+        setupWeeklySelectionAverageTooltip();
     }
 
     /**
@@ -207,6 +208,37 @@ public class WeeklyBreakdownPanel extends JPanel {
         dialog.setVisible(true);
 
         logger.info("Displayed transaction table for week {}", weekIndex);
+    }
+
+
+    /**
+     * Adds a selection listener to the weekly table so that when rows are selected,
+     * the tooltip shows the average of the selected weeks' totals.
+     */
+    private void setupWeeklySelectionAverageTooltip() {
+        table.getSelectionModel().addListSelectionListener(e -> {
+            if (e.getValueIsAdjusting()) return;
+            int[] selectedRows = table.getSelectedRows();
+            logger.info("Weekly table selection changed: selectedRows={}", Arrays.toString(selectedRows));
+            double sum = 0.0;
+            int count = 0;
+            for (int row : selectedRows) {
+                Object val = table.getValueAt(row, 1); // "Total Amount" column
+                if (val != null && val.toString().startsWith("$")) {
+                    try {
+                        sum += Double.parseDouble(val.toString().replace("$", "").replace(",", ""));
+                        count++;
+                    } catch (Exception ex) {
+                        logger.warn("Failed to parse weekly amount from '{}': {}", val, ex.getMessage());
+                    }
+                }
+            }
+            String tooltip = count > 1
+                    ? "Average of selected weeks: $" + String.format("%.2f", sum / count)
+                    : null;
+            table.setToolTipText(tooltip);
+            logger.info("Weekly table tooltip updated: {}", tooltip);
+        });
     }
 
     /**
