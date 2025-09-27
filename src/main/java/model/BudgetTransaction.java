@@ -1,8 +1,9 @@
 package model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
 import util.AppLogger;
-
+import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -13,6 +14,8 @@ import java.util.Locale;
  * Represents a single budget transaction, extending BudgetRow.
  * Adds field for statement period and parsed date.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
+@NoArgsConstructor(force = true)
 public class BudgetTransaction extends BudgetRow {
     private static final Logger logger = AppLogger.getLogger(BudgetTransaction.class);
 

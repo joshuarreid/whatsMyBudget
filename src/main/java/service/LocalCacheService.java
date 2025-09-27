@@ -1,5 +1,6 @@
 package service;
 
+import model.LocalCacheState;
 import org.slf4j.Logger;
 import org.springframework.stereotype.Service;
 import util.AppLogger;
@@ -231,4 +232,55 @@ public class LocalCacheService {
         logger.info("getConfigFile -> '{}'", configFile.getAbsolutePath());
         return configFile;
     }
+
+    /**
+     * Overwrites the local cache config with the values from the given LocalCacheState.
+     * All core properties are replaced; unknown properties are preserved.
+     * @param state LocalCacheState to apply
+     */
+    public void setLocalCacheState(LocalCacheState state) {
+        logger.info("Entering setLocalCacheState(LocalCacheState) with input: {}", state);
+        if (state == null) {
+            logger.warn("setLocalCacheState called with null state. Aborting.");
+            return;
+        }
+        props.setProperty(KEY_BUDGET_CSV_PATH, state.getBudgetCsvPath() != null ? state.getBudgetCsvPath() : "");
+        props.setProperty(KEY_LAST_VIEW, state.getLastView() != null ? state.getLastView() : "");
+        props.setProperty(KEY_CURRENT_STATEMENT, state.getCurrentStatementPeriod() != null ? state.getCurrentStatementPeriod() : "");
+        props.setProperty(KEY_RECENT_BUDGET_FILES, state.getRecentBudgetFiles() != null ? String.join("|", state.getRecentBudgetFiles()) : "");
+        props.setProperty(KEY_RECENT_PROJECTED_FILES, state.getRecentProjectedFiles() != null ? String.join("|", state.getRecentProjectedFiles()) : "");
+        props.setProperty(KEY_STATEMENT_PERIODS, state.getStatementPeriods() != null ? String.join("|", state.getStatementPeriods()) : "");
+        // Optionally: handle statementPeriodToFileMap and appConfig
+        logger.info("LocalCacheState properties set. Saving to config file.");
+        save();
+    }
+
+    /**
+     * Loads and returns the current LocalCacheState from properties.
+     * All fields are loaded from the current config; missing keys default to empty/null as appropriate.
+     * @return LocalCacheState representing the current local cache/config state
+     */
+    public LocalCacheState getLocalCacheState() {
+        logger.info("Entering getLocalCacheState()");
+        LocalCacheState state = new LocalCacheState();
+        try {
+            state.setBudgetCsvPath(props.getProperty(KEY_BUDGET_CSV_PATH, ""));
+            state.setLastView(props.getProperty(KEY_LAST_VIEW, ""));
+            state.setCurrentStatementPeriod(props.getProperty(KEY_CURRENT_STATEMENT, ""));
+            String recentBudgetFiles = props.getProperty(KEY_RECENT_BUDGET_FILES, "");
+            state.setRecentBudgetFiles(recentBudgetFiles.isEmpty() ? new ArrayList<>() : Arrays.asList(recentBudgetFiles.split("\\|")));
+            String recentProjectedFiles = props.getProperty(KEY_RECENT_PROJECTED_FILES, "");
+            state.setRecentProjectedFiles(recentProjectedFiles.isEmpty() ? new ArrayList<>() : Arrays.asList(recentProjectedFiles.split("\\|")));
+            String statementPeriods = props.getProperty(KEY_STATEMENT_PERIODS, "");
+            state.setStatementPeriods(statementPeriods.isEmpty() ? new ArrayList<>() : Arrays.asList(statementPeriods.split("\\|")));
+            // Optionally: load statementPeriodToFileMap and appConfig if needed in future
+            state.setVersion(props.getProperty("version", "1"));
+            logger.info("Loaded LocalCacheState: {}", state);
+        } catch (Exception e) {
+            logger.error("Error constructing LocalCacheState: {}", e.getMessage(), e);
+        }
+        return state;
+    }
+
+
 }

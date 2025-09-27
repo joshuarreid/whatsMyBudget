@@ -1,19 +1,20 @@
+package app;
+
+import config.BudgetAppConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import service.BudgetFileService;
-import service.CSVStateService;
-import service.ImportService;
-import service.LocalCacheService;
-import service.ProjectedFileService;
+import service.*;
 import ui.FileChooserUtil;
 import ui.MainWindow;
 
 import javax.swing.*;
 
+/**
+ * app.Main entry point for the Statement-Based Budgeting application.
+ * Handles bootstrapping, service initialization, and main UI lifecycle.
+ */
 public class Main {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
@@ -34,7 +35,6 @@ public class Main {
             logger.info("LocalCacheService initialized.");
             String csvPath = cache.getBudgetCsvPath();
 
-            // Always check if the file exists, not just config presence
             if (csvPath == null || csvPath.trim().isEmpty()) {
                 logger.info("No budget CSV file found; prompting for budget CSV location.");
                 String selectedPath = FileChooserUtil.promptForBudgetCsvFile(null);
@@ -59,7 +59,6 @@ public class Main {
             ApplicationContext context = new AnnotationConfigApplicationContext(BudgetAppConfig.class);
             logger.info("Spring ApplicationContext initialized.");
 
-            // Ensure the budget CSV file is present and valid (header, etc.)
             BudgetFileService budgetFileService = context.getBean(BudgetFileService.class);
             try {
                 budgetFileService.ensureCsvFileReady();
@@ -68,6 +67,29 @@ public class Main {
                 JOptionPane.showMessageDialog(null, "Failed to initialize budget CSV: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 System.exit(1);
             }
+
+            // --- CLOUD VALIDATION SECTION ---
+            CSVStateService csvStateService = context.getBean(CSVStateService.class);
+            logger.info("Validating DigitalOcean Refresh service before launching UI.");
+            try {
+                if (!csvStateService.validateCloudConnection()) {
+                    logger.error("DigitalOcean Refresh service failed validation. Cloud features will be unavailable.");
+                    JOptionPane.showMessageDialog(null,
+                            "Refresh is not configured correctly or cannot connect to DigitalOcean.\n" +
+                                    "Please check your Refresh settings before using backup/sync features.",
+                            "Refresh Not Configured", JOptionPane.ERROR_MESSAGE);
+                    // Optionally: System.exit(2);
+                } else {
+                    logger.info("DigitalOcean Refresh service validated successfully.");
+                }
+            } catch (Exception e) {
+                logger.error("Exception during DigitalOcean Refresh validation: {}", e.getMessage(), e);
+                JOptionPane.showMessageDialog(null,
+                        "An error occurred while validating Refresh:\n" + e.getMessage(),
+                        "Refresh Error", JOptionPane.ERROR_MESSAGE);
+                // Optionally: System.exit(3);
+            }
+            // --- END CLOUD VALIDATION SECTION ---
 
             MainWindow mainWindow = new MainWindow(lastView, false);
 
@@ -107,36 +129,6 @@ public class Main {
             logger.error("Failed to inject Spring beans into MainWindow: {}", ex.getMessage(), ex);
             JOptionPane.showMessageDialog(null, "App startup failed: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             System.exit(2);
-        }
-    }
-
-    @Configuration
-    public static class BudgetAppConfig {
-        @Bean
-        public LocalCacheService localCacheService() {
-            return new LocalCacheService();
-        }
-
-        @Bean
-        public BudgetFileService budgetFileService() {
-            logger.info("Creating BudgetFileService bean with path: {}", Main.runtimeCsvPath);
-            return new BudgetFileService(Main.runtimeCsvPath);
-        }
-
-        @Bean
-        public ProjectedFileService projectedFileService() {
-            logger.info("Creating ProjectedFileService bean with path: {}", Main.runtimeProjectedCsvPath);
-            return new ProjectedFileService(Main.runtimeProjectedCsvPath);
-        }
-
-        @Bean
-        public ImportService importService() {
-            return new ImportService();
-        }
-
-        @Bean
-        public CSVStateService csvStateService() {
-            return new CSVStateService();
         }
     }
 }

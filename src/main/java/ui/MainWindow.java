@@ -1,7 +1,6 @@
 package ui;
 
 import model.BudgetTransaction;
-import model.BudgetTransactionList;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import util.AppLogger;
@@ -19,7 +18,7 @@ import java.util.Set;
 
 /**
  * Main window for the Statement-Based Budgeting app.
- * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions, making payments, and exiting.
+ * Provides tabs for Josh, Joint, and Anna views, with a File menu for importing transactions, making payments, Save/sync, managing projected expenses, and exiting.
  *
  * Spring @Autowired is used for all service dependencies.
  * Only runtime parameters (lastView, firstLaunch) are passed in the constructor.
@@ -143,7 +142,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Creates a menu bar with File > Import Transactions, Make Payment, Manage Projected Expenses, Exit.
+     * Creates a menu bar with File > Import Transactions, Make Payment, Save, Refresh, Manage Projected Expenses, Exit.
      */
     private JMenuBar createMenuBar() {
         logger.info("Creating menu bar.");
@@ -151,40 +150,170 @@ public class MainWindow extends JFrame {
 
         JMenu fileMenu = new JMenu("File");
 
-        JMenuItem importItem = new JMenuItem("Import Transactions");
-        importItem.addActionListener(e -> {
-            logger.info("User selected Import Transactions from menu.");
+        // Save
+        JMenuItem syncToCloudItem = new JMenuItem("Save");
+        syncToCloudItem.addActionListener(e -> {
+            logger.info("User selected Save from menu.");
+            handleSyncToCloud();
+        });
+
+        // Refresh
+        JMenuItem updateFromCloudItem = new JMenuItem("Refresh");
+        updateFromCloudItem.addActionListener(e -> {
+            logger.info("User selected Refresh from menu.");
+            handleUpdateFromCloud();
+        });
+
+        // Manual Import (renamed from Import Transactions)
+        JMenuItem manualImportItem = new JMenuItem("Manual Import");
+        manualImportItem.addActionListener(e -> {
+            logger.info("User selected Manual Import from menu.");
             handleImportTransactions();
         });
 
-        // NEW: Make Payment menu item
-        JMenuItem makePaymentItem = new JMenuItem("Make Payment");
-        makePaymentItem.addActionListener(e -> {
-            logger.info("User selected Make Payment from menu.");
-            handleMakePayment();
-        });
-
-        JMenuItem manageProjectedItem = new JMenuItem("Manage Projected Expenses");
-        manageProjectedItem.addActionListener(e -> {
-            logger.info("User selected Manage Projected Expenses from menu.");
+        // Projected Expenses (renamed from Manage Projected Expenses)
+        JMenuItem projectedExpensesItem = new JMenuItem("Projected Expenses");
+        projectedExpensesItem.addActionListener(e -> {
+            logger.info("User selected Projected Expenses from menu.");
             handleManageProjectedExpenses();
         });
 
+        // Payments (renamed from Make Payment)
+        JMenuItem paymentsItem = new JMenuItem("View Payments");
+        paymentsItem.addActionListener(e -> {
+            logger.info("User selected View Payments from menu.");
+            handleMakePayment();
+        });
+
+        // Exit
         JMenuItem exitItem = new JMenuItem("Exit");
         exitItem.addActionListener(e -> {
             logger.info("User selected Exit from menu. Exiting application.");
             System.exit(0);
         });
 
-        fileMenu.add(importItem);
-        fileMenu.add(makePaymentItem); // Inserted here in order
-        fileMenu.add(manageProjectedItem);
+        // Add in new order
+        fileMenu.add(syncToCloudItem);
+        fileMenu.add(updateFromCloudItem);
+        fileMenu.add(manualImportItem);
+        fileMenu.add(projectedExpensesItem);
+        fileMenu.add(paymentsItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
+
         menuBar.add(fileMenu);
 
         logger.info("Menu bar created.");
         return menuBar;
+    }
+
+    /**
+     * Handles the Refresh workflow.
+     * - Confirms user intent before .
+     * - Locks UI and shows progress dialog.
+     * - Backs up local state before .
+     * - Handles all exceptions with logging and dialogs.
+     * - Refreshes all panels after .
+     * - Ensures no file path or file name changes occur.
+     */
+    private void handleUpdateFromCloud() {
+        logger.info("Starting  workflow from MainWindow.");
+        if (csvStateService == null) {
+            logger.error("CSVStateService is null in handleUpdateFromCloud.");
+            JOptionPane.showMessageDialog(this, "Application error:  service unavailable.", "Refresh Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Are you sure you want to Refresh from the latest cloud backup?\n" +
+                        "This will OVERWRITE your current budget, projections, and settings (but will NOT change your current file paths or locations).\n\n" +
+                        "A backup of your current local files will be created before Refresh.",
+                "Confirm Refresh from Cloud",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+        if (confirm != JOptionPane.YES_OPTION) {
+            logger.info("User cancelled Refresh operation.");
+            return;
+        }
+
+        final JDialog progressDialog = new JDialog(this, "Restoring from Cloud...", true);
+        JLabel progressLabel = new JLabel("Restoring workspace from cloud backup. Please wait...");
+        progressDialog.setLayout(new BorderLayout());
+        progressDialog.add(progressLabel, BorderLayout.CENTER);
+        progressDialog.setSize(400, 120);
+        progressDialog.setLocationRelativeTo(this);
+        progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() {
+                logger.info("UI locked and progress dialog shown for Refresh.");
+                try {
+                    // The following method must not change file paths or user file locations.
+                    csvStateService.cloudSync();
+                    logger.info("Refresh completed successfully (no exception thrown). File paths remain unchanged.");
+                } catch (Exception ex) {
+                    logger.error("Refresh failed during cloudSync(): {}", ex.getMessage(), ex);
+                    SwingUtilities.invokeLater(() ->
+                            JOptionPane.showMessageDialog(
+                                    MainWindow.this,
+                                    "Refresh failed:\n" + ex.getMessage(),
+                                    "Refresh Error",
+                                    JOptionPane.ERROR_MESSAGE
+                            )
+                    );
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                progressDialog.dispose();
+                logger.info("Progress dialog closed after Refresh.");
+                reloadAndRefreshAllPanels();
+                logger.info("All UI panels refreshed after Refresh.");
+            }
+        };
+
+        // Show progress dialog and start worker
+        SwingUtilities.invokeLater(() -> progressDialog.setVisible(true));
+        worker.execute();
+    }
+
+    /**
+     * Handles the Save workflow.
+     * Prompts the user for confirmation before saving.
+     * Invokes CSVStateService.backupToCloud(), logs all actions, and notifies user of the result.
+     */
+    private void handleSyncToCloud() {
+        logger.info("Starting Save workflow from MainWindow.");
+        if (csvStateService == null) {
+            logger.error("CSVStateService is null in handleSyncToCloud.");
+            JOptionPane.showMessageDialog(this, "Application error: Save service unavailable.", "Sync Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Are you sure you want to save (backup) your current workspace to the cloud?\n\n"
+                        + "This will overwrite your previous cloud backup.",
+                "Confirm Save to Cloud",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE
+        );
+        if (confirm != JOptionPane.YES_OPTION) {
+            logger.info("User declined to save workspace to cloud. Save aborted.");
+            return;
+        }
+        try {
+            csvStateService.backupToCloud();
+            logger.info("Cloud backup completed successfully.");
+            JOptionPane.showMessageDialog(this, "Cloud backup completed successfully.", "Save", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            logger.error("Cloud backup failed: {}", e.getMessage(), e);
+            JOptionPane.showMessageDialog(this, "Cloud backup failed:\n" + e.getMessage(), "Sync Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**
