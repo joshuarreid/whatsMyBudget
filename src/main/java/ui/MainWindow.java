@@ -510,12 +510,25 @@ public class MainWindow extends JFrame {
             }
 
             // Warn if there appear to be duplicate rows
-            Set<String> seenRows = new HashSet<>();
+            Set<String> seenHashes = new HashSet<>();
             boolean hasDuplicates = false;
             if (txs != null) {
                 for (BudgetTransaction tx : txs) {
-                    String key = tx.toString(); // Consider a more precise key for production
-                    if (!seenRows.add(key)) {
+                    // Use your existing BudgetRowHashUtil or a method like tx.uniqueHash()
+                    String hash = BudgetRowHashUtil.computeTransactionHash(
+                            tx.getName(),
+                            tx.getAmount(),
+                            tx.getCategory(),
+                            tx.getCriticality(),
+                            tx.getTransactionDate(),
+                            tx.getAccount(),
+                            tx.getStatus(),
+                            tx.getCreatedTime(),
+                            tx.getPaymentMethod()
+                    );
+                    logger.debug("Computed transaction hash for '{}': {}", tx.getName(), hash);
+                    if (!seenHashes.add(hash)) {
+                        logger.warn("Duplicate detected for transaction: {}", tx);
                         hasDuplicates = true;
                     }
                 }
