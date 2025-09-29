@@ -90,13 +90,22 @@ public class PaymentDialog extends JDialog {
 
     /**
      * Handles the Export button click. Prompts user for a file and exports payment summary as CSV.
+     * The filename will include the current statement period.
+     * The exported CSV will include a total row at the bottom.
      */
     private void handleExportClicked(ActionEvent event) {
         logger.info("Export button clicked in PaymentDialog.");
+
         List<BudgetTransaction> transactions;
+        String statementPeriod = "StatementPeriod";
         try {
             transactions = csvStateService.getCurrentTransactions();
             logger.info("Fetched {} transactions for export.", transactions.size());
+            String period = csvStateService.getCurrentStatementPeriod();
+            if (period != null && !period.isBlank()) {
+                statementPeriod = period.replaceAll("[^a-zA-Z0-9]", "_");
+                logger.info("Current statement period for export file: '{}'", statementPeriod);
+            }
         } catch (Exception ex) {
             logger.error("Failed to fetch transactions for export: {}", ex.getMessage(), ex);
             JOptionPane.showMessageDialog(this, "Failed to fetch transactions for export:\n" + ex.getMessage(),
@@ -112,7 +121,8 @@ public class PaymentDialog extends JDialog {
 
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Save Payment Summary CSV");
-        fileChooser.setSelectedFile(new File("PaymentSummary.csv"));
+        String defaultFileName = String.format("%s_PaymentSummary.csv", statementPeriod);
+        fileChooser.setSelectedFile(new File(defaultFileName));
         int userSelection = fileChooser.showSaveDialog(this);
         if (userSelection != JFileChooser.APPROVE_OPTION) {
             logger.info("Export file dialog cancelled by user.");
@@ -124,7 +134,7 @@ public class PaymentDialog extends JDialog {
 
         try {
             PaymentSummaryExporter.exportPaymentSummaryToCSV(transactions, exportFile);
-            logger.info("Exported payment summary to '{}'", exportFile.getAbsolutePath());
+            logger.info("Exported payment summary to '{}' with total row.", exportFile.getAbsolutePath());
             JOptionPane.showMessageDialog(this, "Payment summary exported successfully to:\n" + exportFile.getAbsolutePath(),
                     "Export Successful", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
