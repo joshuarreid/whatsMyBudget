@@ -121,7 +121,7 @@ public class PaymentDialog extends JDialog {
 
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Save Payment Summary CSV");
-        String defaultFileName = String.format("%s_PaymentSummary.csv", statementPeriod);
+        String defaultFileName = String.format("%s_PaymentSummary.pdf", statementPeriod);
         fileChooser.setSelectedFile(new File(defaultFileName));
         int userSelection = fileChooser.showSaveDialog(this);
         if (userSelection != JFileChooser.APPROVE_OPTION) {
@@ -133,7 +133,7 @@ public class PaymentDialog extends JDialog {
         logger.info("User selected file for export: '{}'", exportFile.getAbsolutePath());
 
         try {
-            PaymentSummaryExporter.exportPaymentSummaryToCSV(transactions, exportFile);
+            PaymentSummaryExporter.exportPaymentSummaryToPDF(transactions, exportFile);
             logger.info("Exported payment summary to '{}' with total row.", exportFile.getAbsolutePath());
             JOptionPane.showMessageDialog(this, "Payment summary exported successfully to:\n" + exportFile.getAbsolutePath(),
                     "Export Successful", JOptionPane.INFORMATION_MESSAGE);
