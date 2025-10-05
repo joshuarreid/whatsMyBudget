@@ -266,7 +266,11 @@ public class ProjectedFileService implements CSVFileService<BudgetRow> {
         return new ArrayList<>(headers);
     }
 
-    private void writeAll(List<BudgetRow> rows) {
+    /**
+     * Writes all BudgetRow objects to the projections CSV file, overwriting its contents.
+     * @param rows List of BudgetRow objects to write.
+     */
+    public void writeAll(List<BudgetRow> rows) {
         logger.info("writeAll called for projectedFilePath={} with {} rows", projectedFilePath, rows.size());
         ensureCsvFileReady();
         try (

@@ -610,4 +610,32 @@ public class CSVStateService {
     public DigitalOceanWorkspaceService getDigitalOceanService() {
         return digitalOceanWorkspaceService;
     }
+
+    /**
+     * Provides access to the internal BudgetFileService instance.
+     * @return the BudgetFileService, or null if not initialized.
+     */
+    public BudgetFileService getBudgetFileService() {
+        logger.info("getBudgetFileService called.");
+        return budgetFileService;
+    }
+
+    /**
+     * Provides access to the internal ProjectedFileService instance.
+     * @return the ProjectedFileService, or null if not initialized.
+     */
+    public ProjectedFileService getProjectedFileService() {
+        logger.info("getProjectedFileService called.");
+        return projectedFileService;
+    }
+
+    /**
+     * Provides access to the internal LocalCacheService instance.
+     * @return the LocalCacheService, or null if not initialized.
+     */
+    public LocalCacheService getLocalCacheService() {
+        logger.info("getLocalCacheService called.");
+        return localCacheService;
+    }
+
 }

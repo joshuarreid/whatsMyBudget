@@ -10,7 +10,8 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.io.File;
+import java.io.*;
+import java.nio.file.*;
 import java.util.List;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -50,7 +51,8 @@ public class PaymentDialog extends JDialog {
 
     /**
      * Builds the UI: PaymentSummaryPanel at top, dynamic breakdown panels below.
-     * Adds an Export button to generate the payment summary CSV.
+     * Adds an Export button to generate the payment summary PDF.
+     * Adds an End Statement button to archive and reset for a new period.
      */
     private void buildUI() {
         logger.info("Building PaymentDialog UI.");
@@ -63,15 +65,29 @@ public class PaymentDialog extends JDialog {
         summaryPanel.setPreferredSize(new Dimension(Short.MAX_VALUE, 110));
         summaryWrapper.add(summaryPanel, BorderLayout.CENTER);
 
-        // Add export button to the top right
+        // Export button
         JButton exportButton = new JButton("Export...");
-        exportButton.setToolTipText("Export payment summary as CSV");
+        exportButton.setToolTipText("Export payment summary as PDF");
         exportButton.addActionListener(this::handleExportClicked);
 
-        // Button panel for alignment
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        buttonPanel.add(exportButton);
-        buttonPanel.setOpaque(false);
+        // End Statement button (new)
+        JButton endStatementButton = new JButton("End Statement");
+        endStatementButton.setToolTipText("Archive and clear current statement, and remove all projections for this period");
+        endStatementButton.addActionListener(this::handleEndStatementClicked);
+
+        // Button panel for alignment, Export on top, End Statement underneath
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
+        JPanel exportButtonWrapper = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        exportButtonWrapper.add(exportButton);
+        exportButtonWrapper.setOpaque(false);
+        buttonPanel.add(exportButtonWrapper);
+
+        JPanel endStatementButtonWrapper = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        endStatementButtonWrapper.add(endStatementButton);
+        endStatementButtonWrapper.setOpaque(false);
+        buttonPanel.add(endStatementButtonWrapper);
+
         summaryWrapper.add(buttonPanel, BorderLayout.EAST);
 
         add(summaryWrapper, BorderLayout.NORTH);
@@ -89,9 +105,9 @@ public class PaymentDialog extends JDialog {
     }
 
     /**
-     * Handles the Export button click. Prompts user for a file and exports payment summary as CSV.
+     * Handles the Export button click. Prompts user for a file and exports payment summary as PDF.
      * The filename will include the current statement period.
-     * The exported CSV will include a total row at the bottom.
+     * The exported PDF will include a total row at the bottom.
      */
     private void handleExportClicked(ActionEvent event) {
         logger.info("Export button clicked in PaymentDialog.");
@@ -120,7 +136,7 @@ public class PaymentDialog extends JDialog {
         }
 
         JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Save Payment Summary CSV");
+        fileChooser.setDialogTitle("Save Payment Summary PDF");
         String defaultFileName = String.format("%s_PaymentSummary.pdf", statementPeriod);
         fileChooser.setSelectedFile(new File(defaultFileName));
         int userSelection = fileChooser.showSaveDialog(this);
@@ -138,9 +154,186 @@ public class PaymentDialog extends JDialog {
             JOptionPane.showMessageDialog(this, "Payment summary exported successfully to:\n" + exportFile.getAbsolutePath(),
                     "Export Successful", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
-            logger.error("Failed to export payment summary CSV: {}", ex.getMessage(), ex);
+            logger.error("Failed to export payment summary PDF: {}", ex.getMessage(), ex);
             JOptionPane.showMessageDialog(this, "Failed to export payment summary:\n" + ex.getMessage(),
                     "Export Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Handles the End Statement button click.
+     * 1. Confirmation dialog before proceeding.
+     * 2. Creates a folder named after the statement period in the budget file directory.
+     * 3. Copies budget CSV, projections CSV, and exports PDF payment summary to that folder.
+     * 4. Clears transactions from the current budgetFile (leaves header).
+     * 5. Removes the current statement period and its projected expenses.
+     */
+    private void handleEndStatementClicked(ActionEvent event) {
+        logger.info("End Statement button clicked in PaymentDialog.");
+
+        // Step 1: Confirmation dialog
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "This will archive the current statement (budget & projections), export a payment summary PDF,\n" +
+                        "clear the current working files, and remove the statement period and associated projections.\n\n" +
+                        "Are you sure you want to end this statement?\n\n" +
+                        "This action cannot be undone.",
+                "Confirm End Statement",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+        logger.info("User confirmation dialog result for End Statement: {}", confirm == JOptionPane.YES_OPTION ? "YES" : "NO");
+        if (confirm != JOptionPane.YES_OPTION) {
+            logger.info("End Statement operation cancelled by user.");
+            return;
+        }
+
+        // Step 2: Gather paths and period
+        String statementPeriod = csvStateService.getCurrentStatementPeriod();
+        String safeStatementPeriod = statementPeriod == null ? "StatementPeriod" : statementPeriod.replaceAll("[^a-zA-Z0-9]", "_");
+        String budgetFilePath = csvStateService.getCurrentStatementFilePath();
+        logger.info("Statement period: '{}', safe name: '{}'", statementPeriod, safeStatementPeriod);
+        logger.info("Budget file path: '{}'", budgetFilePath);
+
+        // Determine folder location
+        Path budgetFile = Paths.get(budgetFilePath);
+        Path budgetDir = budgetFile.getParent();
+        if (budgetDir == null) {
+            logger.error("Could not determine budget file directory.");
+            JOptionPane.showMessageDialog(this, "Budget file directory could not be determined.",
+                    "End Statement Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        Path archiveDir = budgetDir.resolve(safeStatementPeriod);
+        logger.info("Archive directory will be: '{}'", archiveDir);
+
+        // Step 3: Create archive directory
+        try {
+            Files.createDirectories(archiveDir);
+            logger.info("Created archive directory '{}'.", archiveDir);
+        } catch (IOException ex) {
+            logger.error("Failed to create archive directory '{}': {}", archiveDir, ex.getMessage(), ex);
+            JOptionPane.showMessageDialog(this, "Failed to create archive directory:\n" + ex.getMessage(),
+                    "End Statement Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Step 4: Archive budget file
+        Path archivedBudget = archiveDir.resolve(budgetFile.getFileName());
+        try {
+            Files.copy(budgetFile, archivedBudget, StandardCopyOption.REPLACE_EXISTING);
+            logger.info("Copied budget file to archive: '{}'.", archivedBudget);
+        } catch (IOException ex) {
+            logger.error("Failed to copy budget file to archive: {}", ex.getMessage(), ex);
+            JOptionPane.showMessageDialog(this, "Failed to archive budget file:\n" + ex.getMessage(),
+                    "End Statement Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Step 5: Archive projections file
+        String projectionsFilePath = null;
+        Path archivedProjections = null;
+        try {
+            service.ProjectedFileService projectedFileService = csvStateService.getProjectedFileService();
+            if (projectedFileService == null) {
+                throw new IllegalStateException("Could not access ProjectedFileService.");
+            }
+            projectionsFilePath = projectedFileService.getFilePath();
+            Path projectionsFile = Paths.get(projectionsFilePath);
+            archivedProjections = archiveDir.resolve(projectionsFile.getFileName());
+            Files.copy(projectionsFile, archivedProjections, StandardCopyOption.REPLACE_EXISTING);
+            logger.info("Copied projections file to archive: '{}'.", archivedProjections);
+        } catch (Exception ex) {
+            logger.error("Failed to archive projections file: {}", ex.getMessage(), ex);
+            JOptionPane.showMessageDialog(this, "Failed to archive projections file:\n" + ex.getMessage(),
+                    "End Statement Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Step 6: Export PDF payment summary to archive folder (using existing logic, but auto-save to folder)
+        List<BudgetTransaction> transactions;
+        File pdfExportFile = archiveDir.resolve(String.format("%s_PaymentSummary.pdf", safeStatementPeriod)).toFile();
+        try {
+            transactions = csvStateService.getCurrentTransactions();
+            logger.info("Fetched {} transactions for PDF export.", transactions.size());
+            if (transactions == null || transactions.isEmpty()) {
+                logger.warn("No transactions to export for PDF summary.");
+            } else {
+                PaymentSummaryExporter.exportPaymentSummaryToPDF(transactions, pdfExportFile);
+                logger.info("Exported payment summary PDF to '{}'.", pdfExportFile.getAbsolutePath());
+            }
+        } catch (Exception ex) {
+            logger.error("Failed to export payment summary PDF to archive: {}", ex.getMessage(), ex);
+            JOptionPane.showMessageDialog(this, "Failed to export payment summary PDF:\n" + ex.getMessage(),
+                    "End Statement Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Step 7: Clear current budget file (leave header)
+        try {
+            service.BudgetFileService budgetFileService = csvStateService.getBudgetFileService();
+            if (budgetFileService == null) {
+                throw new IllegalStateException("Could not obtain BudgetFileService instance.");
+            }
+            budgetFileService.overwriteAll(new ArrayList<>());
+            logger.info("Cleared transactions from budget file '{}'.", budgetFilePath);
+        } catch (Exception ex) {
+            logger.error("Failed to clear transactions from budgetFile CSV: {}", ex.getMessage(), ex);
+            JOptionPane.showMessageDialog(this, "Failed to clear transactions from CSV:\n" + ex.getMessage(),
+                    "End Statement Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Step 8: Remove current statement period and its projections
+        // ... (within handleEndStatementClicked)
+
+        // Step 8: Remove current statement period and its projections
+        try {
+            String curPeriod = statementPeriod;
+            logger.info("Current statement period to remove: '{}'", curPeriod);
+
+            // Remove from LocalCacheService
+            service.LocalCacheService localCacheService = csvStateService.getLocalCacheService();
+            if (localCacheService == null) {
+                throw new IllegalStateException("Could not obtain LocalCacheService instance.");
+            }
+            List<String> periods = localCacheService.getAllStatementPeriods();
+            List<String> updatedPeriods = periods.stream()
+                    .filter(p -> !p.equals(curPeriod))
+                    .collect(Collectors.toList());
+            localCacheService.set("statementPeriods", String.join("|", updatedPeriods));
+            localCacheService.setCurrentStatementPeriod("");
+            logger.info("Removed statement period '{}' from local cache.", curPeriod);
+
+            // Remove projected transactions for this period
+            service.ProjectedFileService projectedFileService = csvStateService.getProjectedFileService();
+            if (projectedFileService == null) {
+                throw new IllegalStateException("Could not obtain ProjectedFileService instance.");
+            }
+            List<model.BudgetRow> allProjected = projectedFileService.readAll();
+            List<model.BudgetRow> keepProjected = allProjected.stream()
+                    .filter(row -> {
+                        String period = "";
+                        if (row instanceof model.ProjectedTransaction) {
+                            period = ((model.ProjectedTransaction) row).getStatementPeriod();
+                        }
+                        return !curPeriod.equals(period);
+                    })
+                    .collect(Collectors.toList());
+            projectedFileService.writeAll(keepProjected);
+            logger.info("Removed projected transactions for statement period '{}'.", curPeriod);
+
+            JOptionPane.showMessageDialog(this,
+                    "Statement ended and archived successfully.\nBudget, projections, and PDF saved to: " + archiveDir.toString(),
+                    "End Statement Complete", JOptionPane.INFORMATION_MESSAGE);
+
+            // Optionally, close dialog or reload UI
+            dispose();
+
+        } catch (Exception ex) {
+            logger.error("Failed to remove statement period or projected expenses: {}", ex.getMessage(), ex);
+            JOptionPane.showMessageDialog(this, "Failed to remove statement period or projections:\n" + ex.getMessage(),
+                    "End Statement Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
