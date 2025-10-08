@@ -150,19 +150,19 @@ public class MainWindow extends JFrame {
 
         JMenu fileMenu = new JMenu("File");
 
-        // Save
-        JMenuItem syncToCloudItem = new JMenuItem("Save");
-        syncToCloudItem.addActionListener(e -> {
-            logger.info("User selected Save from menu.");
-            handleSyncToCloud();
-        });
+//        // Save
+//        JMenuItem syncToCloudItem = new JMenuItem("Save");
+//        syncToCloudItem.addActionListener(e -> {
+//            logger.info("User selected Save from menu.");
+//            handleSyncToCloud();
+//        });
 
-        // Refresh
-        JMenuItem updateFromCloudItem = new JMenuItem("Refresh");
-        updateFromCloudItem.addActionListener(e -> {
-            logger.info("User selected Refresh from menu.");
-            handleUpdateFromCloud();
-        });
+//        // Refresh
+//        JMenuItem updateFromCloudItem = new JMenuItem("Refresh");
+//        updateFromCloudItem.addActionListener(e -> {
+//            logger.info("User selected Refresh from menu.");
+//            handleUpdateFromCloud();
+//        });
 
         // Manual Import (renamed from Import Transactions)
         JMenuItem manualImportItem = new JMenuItem("Manual Import");
@@ -193,8 +193,8 @@ public class MainWindow extends JFrame {
         });
 
         // Add in new order
-        fileMenu.add(syncToCloudItem);
-        fileMenu.add(updateFromCloudItem);
+//        fileMenu.add(syncToCloudItem);
+//        fileMenu.add(updateFromCloudItem);
         fileMenu.add(manualImportItem);
         fileMenu.add(projectedExpensesItem);
         fileMenu.add(paymentsItem);
