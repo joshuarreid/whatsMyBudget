@@ -1,6 +1,8 @@
-# WhatsMyBudget Prototype
+## WhatsMyBudget Prototype
 
-**WhatsMyBudget** is a application that I will use for personal budget tracking, category breakdowns, and weekly spending analysis. The app demonstrates interactive UI features for exploring spending data, with a focus on visualization and analysis rather than deployment or production use.
+**WhatsMyBudget** is an application I will use for personal budget tracking, category breakdowns, and weekly spending analysis. The app demonstrates interactive UI features for exploring spending data, with a focus on visualization and analysis rather than deployment or production use.
+
+🔗 **Production Repository:** [WhatsMyBudgetDesktop](https://github.com/joshuarreid/WhatsMyBudgetDesktop)
 
 ## Features
 
