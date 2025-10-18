@@ -1,4 +1,4 @@
-# WhatsMyBudget
+# WhatsMyBudget Prototype
 
 **WhatsMyBudget** is a Java application that I use for personal budget tracking, category breakdowns, and weekly spending analysis. The app demonstrates interactive UI features for exploring spending data, with a focus on visualization and analysis rather than deployment or production use.
 
